@@ -72,6 +72,7 @@ func getLogFile() *os.File {
 	file, _ := exec.LookPath(os.Args[0])
 	splitfile := strings.Split(file, `\`)
 	filename := splitfile[len(splitfile)-1]
+	os.MkdirAll(commonpath+`\PrintSystem\Log`, 0666)
 	filename = commonpath + `\PrintSystem\Log\` + filename + `.log`
 
 	// os.Stdout.WriteString(filename + "\n")
