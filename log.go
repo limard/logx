@@ -77,7 +77,17 @@ func getLogFile() *os.File {
 
 	// os.Stdout.WriteString(filename + "\n")
 
-	logfile, _ := os.OpenFile(filename, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0666)
+	// is size > 2mb then clear
+	fileflag := os.O_CREATE | os.O_RDWR
+	if fi, err := os.Stat(filename); err == nil || (err != nil && os.IsExist(err)) {
+		if fi.Size() > 1024*1024*2 {
+			fileflag |= os.O_TRUNC
+		} else {
+			fileflag |= os.O_APPEND
+		}
+	}
+
+	logfile, _ := os.OpenFile(filename, fileflag, 0666)
 
 	return logfile
 }
@@ -126,7 +136,7 @@ func itoa(buf *[]byte, i int, wid int) {
 	*buf = append(*buf, b[bp:]...)
 }
 
-func (l *Logger) formatHeader(buf *[]byte, t time.Time, file string, line int) {
+func (l *Logger) formatHeader(buf *[]byte, t time.Time, file string, line int, funName string) {
 	*buf = append(*buf, l.prefix...)
 	if l.flag&LUTC != 0 {
 		t = t.UTC()
@@ -168,6 +178,8 @@ func (l *Logger) formatHeader(buf *[]byte, t time.Time, file string, line int) {
 		}
 		*buf = append(*buf, file...)
 		*buf = append(*buf, ':')
+		*buf = append(*buf, funName...)
+		*buf = append(*buf, ':')
 		itoa(buf, line, -1)
 		*buf = append(*buf, ": "...)
 	}
@@ -183,13 +195,14 @@ func (l *Logger) Output(calldepth int, s string) error {
 	now := time.Now() // get this early.
 	var file string
 	var line int
+	var pc uintptr
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if l.flag&(Lshortfile|Llongfile) != 0 {
 		// release lock while getting caller info - it's expensive.
 		l.mu.Unlock()
 		var ok bool
-		_, file, line, ok = runtime.Caller(calldepth)
+		pc, file, line, ok = runtime.Caller(calldepth)
 		if !ok {
 			file = "???"
 			line = 0
@@ -197,7 +210,8 @@ func (l *Logger) Output(calldepth int, s string) error {
 		l.mu.Lock()
 	}
 	l.buf = l.buf[:0]
-	l.formatHeader(&l.buf, now, file, line)
+	funName := runtime.FuncForPC(pc)
+	l.formatHeader(&l.buf, now, file, line, funName.Name())
 	l.buf = append(l.buf, s...)
 	if len(s) == 0 || s[len(s)-1] != '\n' {
 		l.buf = append(l.buf, '\n')
