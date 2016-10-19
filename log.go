@@ -64,7 +64,7 @@ type Logger struct {
 var std = New()
 
 func getLogFile() *os.File {
-	commonpath, _ := systempath.GetCommmonAppDataDirectory()
+	commonpath := systempath.GetCommmonAppDataDirectory()
 	if commonpath == "" {
 		commonpath = `C:\log`
 	}
@@ -104,12 +104,15 @@ func New() *Logger {
 	splitfile := strings.Split(file, `\`)
 	filename := splitfile[len(splitfile)-1]
 
-	return &Logger{
+	l := Logger{
 		outStd:  os.Stderr,
 		outFile: getLogFile(),
 		outFlag: LOutStd | LOutFile | LOutDbg,
-		prefix:  "[BIS][" + filename + "]",
+		prefix:  "[BIS]",
 		flag:    LCstFlags}
+	l.Output(0, filename)
+
+	return &l
 }
 
 // SetOut ...
@@ -212,9 +215,11 @@ func (l *Logger) Output(calldepth int, s string) error {
 	l.buf = l.buf[:0]
 	funName := runtime.FuncForPC(pc)
 	l.formatHeader(&l.buf, now, file, line, funName.Name())
+
 	l.buf = append(l.buf, s...)
+
 	if len(s) == 0 || s[len(s)-1] != '\n' {
-		l.buf = append(l.buf, '\n')
+		l.buf = append(l.buf, '\r', '\n')
 	}
 
 	var err error
