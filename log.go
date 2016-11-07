@@ -1,4 +1,4 @@
-package log
+package logx
 
 import (
 	"fmt"
@@ -43,8 +43,8 @@ const (
 )
 
 var (
-	dllKernel              = syscall.NewLazyDLL("Kernel32.dll")
-	procOutputDebugStringA = dllKernel.NewProc("OutputDebugStringA")
+	dllKernel             = syscall.NewLazyDLL("Kernel32.dll")
+	procOutputDebugString = dllKernel.NewProc("OutputDebugStringW")
 )
 
 // A Logger represents an active logging object that generates lines of
@@ -230,7 +230,7 @@ func (l *Logger) Output(calldepth int, s string) error {
 		_, err = l.outFile.Write(l.buf)
 	}
 	if l.outFlag&LOutDbg != 0 {
-		procOutputDebugStringA.Call(uintptr(unsafe.Pointer(syscall.StringBytePtr(string(l.buf)))))
+		procOutputDebugString.Call(uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr(string(l.buf)))))
 	}
 
 	return err
