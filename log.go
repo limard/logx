@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"syscall"
@@ -100,18 +101,17 @@ func init() {
 // The prefix appears at the beginning of each generated log line.
 // The flag argument defines the logging properties.
 func New() *Logger {
-	file, _ := exec.LookPath(os.Args[0])
-	splitfile := strings.Split(file, `\`)
-	filename := splitfile[len(splitfile)-1]
-
 	l := Logger{
 		outStd:  os.Stderr,
 		outFile: getLogFile(),
 		outFlag: LOutStd | LOutFile | LOutDbg,
 		prefix:  "[BIS]",
 		flag:    LCstFlags}
-	l.Output(0, filename)
 
+	// file, _ := exec.LookPath(os.Args[0])
+	// splitfile := strings.Split(file, `\`)
+	// filename := splitfile[len(splitfile)-1]
+	// l.Output(0, filename)
 	return &l
 }
 
@@ -317,7 +317,16 @@ func (l *Logger) SetPrefix(prefix string) {
 	l.prefix = prefix
 }
 
-// SetOutput sets the output destination for the standard logger.
+// PanicHandler is output panic when a panic occurs.
+// call this function by defer
+func (l *Logger) PanicHandler() {
+	if err := recover(); err != nil {
+		l.Output(1, fmt.Sprintf("%v\r\n", err))
+		l.Output(1, string(debug.Stack()))
+	}
+}
+
+// SetOut sets the output destination for the standard logger.
 func SetOut(flag int) {
 	std.mu.Lock()
 	defer std.mu.Unlock()
@@ -412,4 +421,10 @@ func Panicln(v ...interface{}) {
 // for the caller of Output.
 func Output(calldepth int, s string) error {
 	return std.Output(calldepth+1, s) // +1 for this frame.
+}
+
+// PanicHandler is output panic when a panic occurs.
+// call this function by defer PanicHandler
+func PanicHandler() {
+	std.PanicHandler()
 }
