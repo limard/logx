@@ -3,15 +3,18 @@ package logx
 import (
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"runtime/debug"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
 	"unsafe"
+
+	"strings"
 
 	"bitbucket.org/Limard/win/systempath"
 )
@@ -65,15 +68,29 @@ type Logger struct {
 var std = New()
 
 func getLogFile() *os.File {
-	commonpath := systempath.GetCommmonAppDataDirectory()
+	commonpath, _ := systempath.GetCommmonAppDataDirectory()
 	if commonpath == "" {
 		commonpath = `C:\log`
 	}
 
 	file, _ := exec.LookPath(os.Args[0])
-	splitfile := strings.Split(file, `\`)
-	filename := splitfile[len(splitfile)-1]
+	filename := filepath.Base(file)
 	os.MkdirAll(commonpath+`\PrintSystem\Log`, 0666)
+
+	// for i := 0; i < 10; i++ {
+	// 	_, fname, _, ok := runtime.Caller(i)
+	// 	if ok == false {
+	// 		break
+	// 	}
+	// 	log.Println(i, fname)
+	// }
+
+	// _, fname, _, ok := runtime.Caller(2)
+	// if ok {
+	// 	// log.Println(fname)
+	// 	filename += "." + filepath.Base(fname)
+	// }
+
 	filename = commonpath + `\PrintSystem\Log\` + filename + `.log`
 
 	// os.Stdout.WriteString(filename + "\n")
@@ -107,11 +124,6 @@ func New() *Logger {
 		outFlag: LOutStd | LOutFile | LOutDbg,
 		prefix:  "[BIS]",
 		flag:    LCstFlags}
-
-	// file, _ := exec.LookPath(os.Args[0])
-	// splitfile := strings.Split(file, `\`)
-	// filename := splitfile[len(splitfile)-1]
-	// l.Output(0, filename)
 	return &l
 }
 
@@ -214,12 +226,19 @@ func (l *Logger) Output(calldepth int, s string) error {
 	}
 	l.buf = l.buf[:0]
 	funName := runtime.FuncForPC(pc)
-	l.formatHeader(&l.buf, now, file, line, funName.Name())
+	funcName := funName.Name()
+	if num := strings.LastIndex(funcName, "."); num != 0 {
+		funcName = funcName[num+1:]
+	}
+	l.formatHeader(&l.buf, now, file, line, funcName)
 
 	l.buf = append(l.buf, s...)
 
-	if len(s) == 0 || s[len(s)-1] != '\n' {
+	if s[len(s)-1] != '\n' {
 		l.buf = append(l.buf, '\r', '\n')
+	} else if s[len(s)-1] == '\n' && s[len(s)-2] != '\r' {
+		l.buf[len(l.buf)-1] = '\r'
+		l.buf = append(l.buf, '\n')
 	}
 
 	var err error
@@ -371,6 +390,19 @@ func Printf(format string, v ...interface{}) {
 // Arguments are handled in the manner of fmt.Println.
 func Println(v ...interface{}) {
 	std.Output(2, fmt.Sprintln(v...))
+}
+
+func PrintCallStack() {
+	i := 2
+	for {
+		pc, _, _, ok := runtime.Caller(i)
+		if ok == false {
+			break
+		}
+		fn := runtime.FuncForPC(pc)
+		log.Println(fn.Name())
+		i++
+	}
 }
 
 // Fatal is equivalent to Print() followed by a call to os.Exit(1).
