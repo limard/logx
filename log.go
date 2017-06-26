@@ -85,12 +85,6 @@ func getLogFile() *os.File {
 	// 	log.Println(i, fname)
 	// }
 
-	// _, fname, _, ok := runtime.Caller(2)
-	// if ok {
-	// 	// log.Println(fname)
-	// 	filename += "." + filepath.Base(fname)
-	// }
-
 	filename = commonpath + `\PrintSystem\Log\` + filename + `.log`
 
 	// os.Stdout.WriteString(filename + "\n")
@@ -249,7 +243,8 @@ func (l *Logger) Output(calldepth int, s string) error {
 		_, err = l.outFile.Write(l.buf)
 	}
 	if l.outFlag&LOutDbg != 0 {
-		procOutputDebugString.Call(uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr(string(l.buf)))))
+		p, _ := syscall.UTF16PtrFromString(string(l.buf))
+		procOutputDebugString.Call(uintptr(unsafe.Pointer(p)))
 	}
 
 	return err
@@ -405,41 +400,15 @@ func PrintCallStack() {
 	}
 }
 
-// Fatal is equivalent to Print() followed by a call to os.Exit(1).
-func Fatal(v ...interface{}) {
-	std.Output(2, fmt.Sprint(v...))
-	os.Exit(1)
-}
-
 // Fatalf is equivalent to Printf() followed by a call to os.Exit(1).
 func Fatalf(format string, v ...interface{}) {
 	std.Output(2, fmt.Sprintf(format, v...))
 	os.Exit(1)
 }
 
-// Fatalln is equivalent to Println() followed by a call to os.Exit(1).
-func Fatalln(v ...interface{}) {
-	std.Output(2, fmt.Sprintln(v...))
-	os.Exit(1)
-}
-
-// Panic is equivalent to Print() followed by a call to panic().
-func Panic(v ...interface{}) {
-	s := fmt.Sprint(v...)
-	std.Output(2, s)
-	panic(s)
-}
-
 // Panicf is equivalent to Printf() followed by a call to panic().
 func Panicf(format string, v ...interface{}) {
 	s := fmt.Sprintf(format, v...)
-	std.Output(2, s)
-	panic(s)
-}
-
-// Panicln is equivalent to Println() followed by a call to panic().
-func Panicln(v ...interface{}) {
-	s := fmt.Sprintln(v...)
 	std.Output(2, s)
 	panic(s)
 }
