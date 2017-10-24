@@ -6,21 +6,76 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"io/ioutil"
+	"encoding/json"
+	"strings"
 )
 
 var (
-	hFile      *os.File
-	logFile    = log.New(nil, "", log.Lshortfile|log.Ldate|log.Ltime)
-	logPath    string
-	logCounter = 0
-	outputFlag = OutputFlag_File | OutputFlag_Console | OutputFlag_DbgView
+	hFile       *os.File
+	logFile     = log.New(nil, "", log.Lshortfile|log.Ldate|log.Ltime)
+	logPath     string
+	logCounter  = 0
+	outputFlag  = OutputFlag_File | OutputFlag_Console | OutputFlag_DbgView
+	outputLevel = OutputLevel_Debug
 )
 
 const (
-	OutputFlag_File            = 1 << iota
+	OutputFlag_File = 1 << iota
 	OutputFlag_Console
 	OutputFlag_DbgView
+
+	OutputLevel_Debug      = 100
+	OutputLevel_Info       = 200
+	OutputLevel_Warn       = 300
+	OutputLevel_Error      = 400
+	OutputLevel_Unexpected = 500
 )
+
+func init() {
+	//fmt.Println("init")
+	type c struct {
+		OutputLevel string
+		OutputFlag []string
+	}
+
+	buf, e := ioutil.ReadFile("log.json")
+	if e == nil {
+		var c1 c
+		json.Unmarshal(buf, &c1)
+
+		if len(c1.OutputFlag) != 0 {
+			outputFlag = 0
+			for _, f := range c1.OutputFlag {
+				switch strings.ToLower(f)  {
+				case "file":
+					outputFlag |= OutputFlag_File
+				case "console":
+					outputFlag |= OutputFlag_Console
+				case "dbgview":
+					outputFlag |= OutputFlag_DbgView
+				}
+			}
+		}
+
+		if c1.OutputLevel != "" {
+			switch strings.ToLower(c1.OutputLevel) {
+			case "debug":
+				outputLevel = OutputLevel_Debug
+			case "info":
+				outputLevel = OutputLevel_Info
+			case "warn":
+				outputLevel = OutputLevel_Warn
+			case "error":
+				outputLevel = OutputLevel_Error
+			case "unexpected":
+				outputLevel = OutputLevel_Unexpected
+			}
+		}
+	}
+
+	output(fmt.Sprintf("Log Level: %v Flag: %v", outputLevel, outputFlag))
+}
 
 func getLogFile(fDir string) *os.File {
 	os.MkdirAll(fDir, 0666)
@@ -31,8 +86,7 @@ func getLogFile(fDir string) *os.File {
 	os.Remove(filename + ".old")
 	os.Rename(filename, filename+".old")
 
-	fileflag := os.O_CREATE | os.O_RDWR | os.O_TRUNC
-	logfile, _ := os.OpenFile(filename, fileflag, 0666)
+	logfile, _ := os.OpenFile(filename, os.O_CREATE | os.O_RDWR | os.O_TRUNC, 0666)
 	return logfile
 }
 
@@ -86,42 +140,72 @@ func output(s string) {
 }
 
 func Debug(v ...interface{}) {
+	if outputLevel > OutputLevel_Debug {
+		return
+	}
 	output(fmt.Sprintf(`[DEBUG]%s`, fmt.Sprint(v...)))
 }
 
 func Debugf(format string, v ...interface{}) {
+	if outputLevel > OutputLevel_Debug {
+		return
+	}
 	output(fmt.Sprintf(`[DEBUG]`+format, v...))
 }
 
 func Info(v ...interface{}) {
+	if outputLevel > OutputLevel_Info {
+		return
+	}
 	output(fmt.Sprintf(`[INFO ]%s`, fmt.Sprint(v...)))
 }
 
 func Infof(format string, v ...interface{}) {
+	if outputLevel > OutputLevel_Info {
+		return
+	}
 	output(fmt.Sprintf(`[INFO ]`+format, v...))
 }
 
 func Warn(v ...interface{}) {
+	if outputLevel > OutputLevel_Warn {
+		return
+	}
 	output(fmt.Sprintf(`[WARN ]%s`, fmt.Sprint(v...)))
 }
 
 func Warnf(format string, v ...interface{}) {
+	if outputLevel > OutputLevel_Warn {
+		return
+	}
 	output(fmt.Sprintf(`[WARN ]`+format, v...))
 }
 
 func Error(v ...interface{}) {
+	if outputLevel > OutputLevel_Error {
+		return
+	}
 	output(fmt.Sprintf(`[ERROR]%s`, fmt.Sprint(v...)))
 }
 
 func Errorf(format string, v ...interface{}) {
+	if outputLevel > OutputLevel_Error {
+		return
+	}
 	output(fmt.Sprintf(`[ERROR]`+format, v...))
 }
 
 func Unexpected(v ...interface{}) {
+	if outputLevel > OutputLevel_Unexpected {
+		return
+	}
 	output(fmt.Sprintf(`[UNEXP]%s`, fmt.Sprint(v...)))
 }
 
 func Unexpectedf(format string, v ...interface{}) {
+	if outputLevel > OutputLevel_Unexpected {
+		return
+	}
 	output(fmt.Sprintf(`[UNEXP]`+format, v...))
 }
 
@@ -130,5 +214,11 @@ func SetLogPath(s string) {
 }
 
 func SetOutputFlag(flag int) {
+	output(fmt.Sprintf("Log Level: %v Flag: %v", outputLevel, flag))
 	outputFlag = flag
+}
+
+func SetOutputLevel(level int) {
+	output(fmt.Sprintf("Log Level: %v Flag: %v", level, outputFlag))
+	outputLevel = level
 }
