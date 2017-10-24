@@ -60,6 +60,17 @@ func renewLogFile() {
 }
 
 func output(s string) {
+	l := len(s)
+	if l > 1 {
+		if s[l-2:] == "\r\n" {
+			// OK
+		} else if s[l-1:] == "\r" || s[l-1:] == "\n" {
+			s = s[0:l-1] + "\r\n"
+		} else {
+			s += "\r\n"
+		}
+	}
+
 	if outputFlag&OutputFlag_File != 0 {
 		renewLogFile()
 		logFile.Output(2, s)
