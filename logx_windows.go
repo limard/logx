@@ -3,46 +3,20 @@
 package logx
 
 import (
-	"os"
-	"os/exec"
-	"path/filepath"
 	"syscall"
 	"unsafe"
 )
 
-func getLogFile() *os.File {
-	commonpath, _ := getCommmonAppDataDirectory()
-	if commonpath == "" {
-		commonpath = `C:\log`
+// Bis path
+
+func getBisPath() string {
+	s, e := getCommmonAppDataDirectory()
+	if e != nil {
+		s = `C:\log`
 	}
 
-	file, _ := exec.LookPath(os.Args[0])
-	filename := filepath.Base(file)
-	os.MkdirAll(commonpath+`\PrintSystem\Log`, 0666)
-
-	// for i := 0; i < 10; i++ {
-	// 	_, fname, _, ok := runtime.Caller(i)
-	// 	if ok == false {
-	// 		break
-	// 	}
-	// 	log.Println(i, fname)
-	// }
-
-	filename = commonpath + `\PrintSystem\Log\` + filename + `.log`
-
-	// is size > 2mb then clear
-	fileflag := os.O_CREATE | os.O_RDWR
-	if fi, err := os.Stat(filename); err == nil || (err != nil && os.IsExist(err)) {
-		if fi.Size() > 1024*1024*2 {
-			fileflag |= os.O_TRUNC
-		} else {
-			fileflag |= os.O_APPEND
-		}
-	}
-
-	logfile, _ := os.OpenFile(filename, fileflag, 0666)
-
-	return logfile
+	s += `\PrintSystem\Log\`
+	return s
 }
 
 var (
@@ -71,6 +45,8 @@ func shGetSpecialFolderPath(nFolder int) (string, error) {
 
 	return syscall.UTF16ToString(pt), err
 }
+
+// OutputDebugStringW
 
 var (
 	dllKernel             = syscall.NewLazyDLL("Kernel32.dll")
