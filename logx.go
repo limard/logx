@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"encoding/json"
 	"strings"
+	"runtime"
 )
 
 var (
@@ -127,7 +128,7 @@ func output(s string) {
 
 	if outputFlag&OutputFlag_File != 0 {
 		renewLogFile()
-		logFile.Output(2, s)
+		logFile.Output(3, s)
 	}
 
 	if outputFlag&OutputFlag_Console != 0 {
@@ -137,6 +138,19 @@ func output(s string) {
 	if outputFlag&OutputFlag_DbgView != 0 {
 		outputToDebugView([]byte("[BIS]" + s))
 	}
+}
+
+func Trace() {
+	if outputLevel > OutputLevel_Debug {
+		return
+	}
+
+	funcName := ""
+	pc, _, _, ok := runtime.Caller(1)
+	if ok {
+		funcName = runtime.FuncForPC(pc).Name()
+	}
+	output(fmt.Sprintf("[TRACE]%v", funcName))
 }
 
 func Debug(v ...interface{}) {
