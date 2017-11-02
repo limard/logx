@@ -7,9 +7,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"io/ioutil"
-	"encoding/json"
 	"strings"
 	"runtime"
+	"gopkg.in/yaml.v2"
 )
 
 var (
@@ -33,17 +33,16 @@ const (
 	OutputLevel_Unexpected = 500
 )
 
-func init() {
-	//fmt.Println("init")
-	type c struct {
-		OutputLevel string
-		OutputFlag []string
-	}
+type configFile struct {
+	OutputLevel string
+	OutputFlag []string
+}
 
-	buf, e := ioutil.ReadFile("log.json")
+func init() {
+	buf, e := ioutil.ReadFile("log.yaml")
 	if e == nil {
-		var c1 c
-		json.Unmarshal(buf, &c1)
+		var c1 configFile
+		yaml.Unmarshal(buf, &c1)
 
 		if len(c1.OutputFlag) != 0 {
 			outputFlag = 0
@@ -74,8 +73,6 @@ func init() {
 			}
 		}
 	}
-
-	output(fmt.Sprintf("Log Level: %v Flag: %v", outputLevel, outputFlag))
 }
 
 func getLogFile(fDir string) *os.File {

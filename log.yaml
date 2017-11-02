@@ -1,0 +1,7 @@
+#one of debug, info, warn, error, unexpected
+outputlevel: debug
+
+outputflag:
+#- console
+- dbgview
+- file
