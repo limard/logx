@@ -2,14 +2,15 @@ package logx
 
 import (
 	"fmt"
+	"gopkg.in/yaml.v2"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"io/ioutil"
-	"strings"
 	"runtime"
-	"gopkg.in/yaml.v2"
+	"strings"
+	"time"
 )
 
 var (
@@ -35,7 +36,7 @@ const (
 
 type configFile struct {
 	OutputLevel string
-	OutputFlag []string
+	OutputFlag  []string
 }
 
 func init() {
@@ -47,7 +48,7 @@ func init() {
 		if len(c1.OutputFlag) != 0 {
 			outputFlag = 0
 			for _, f := range c1.OutputFlag {
-				switch strings.ToLower(f)  {
+				switch strings.ToLower(f) {
 				case "file":
 					outputFlag |= OutputFlag_File
 				case "console":
@@ -79,17 +80,29 @@ func getLogFile(fDir string) *os.File {
 	os.MkdirAll(fDir, 0666)
 
 	file, _ := exec.LookPath(os.Args[0])
-	filename := fDir + filepath.Base(file) + `.log`
+	filename := fDir + filepath.Base(file) + `.` + time.Now().Format(`060102_150405`) + `.log`
 
-	os.Remove(filename + ".old")
-	os.Rename(filename, filename+".old")
+	filepath.Walk(fDir, func(fPath string, fInfo os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if fInfo.IsDir() {
+			return nil
+		}
+		if strings.Contains(filepath.Base(fPath), filepath.Base(file)) {
+			if time.Now().Sub(fInfo.ModTime()) > 30*24*time.Hour {
+				os.Remove(fPath)
+			}
+		}
+		return nil
+	})
 
-	logfile, _ := os.OpenFile(filename, os.O_CREATE | os.O_RDWR | os.O_TRUNC, 0666)
+	logfile, _ := os.OpenFile(filename, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0666)
 	return logfile
 }
 
 func renewLogFile() {
-	if logCounter != 0 && logCounter < 50 {
+	if logCounter != 0 && logCounter < 100 {
 		logCounter++
 		return
 	}
@@ -232,4 +245,8 @@ func SetOutputFlag(flag int) {
 func SetOutputLevel(level int) {
 	output(fmt.Sprintf("Log Level: %v Flag: %v", level, outputFlag))
 	outputLevel = level
+}
+
+func SetFalg(flag int) {
+	logFile.SetFlags(flag)
 }
