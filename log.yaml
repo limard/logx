@@ -1,8 +1,0 @@
-# outputlevel is one of debug, info, warn, error or unexpected
-outputlevel: debug
-
-# outputflag is an array. console, dbgview, file
-outputflag:
-- console
-- dbgview
-- file

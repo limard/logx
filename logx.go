@@ -2,7 +2,6 @@ package logx
 
 import (
 	"fmt"
-	"gopkg.in/yaml.v2"
 	"io"
 	"io/ioutil"
 	"log"
@@ -12,6 +11,7 @@ import (
 	"runtime"
 	"strings"
 	"time"
+	"encoding/json"
 )
 
 var (
@@ -45,10 +45,10 @@ type configFile struct {
 func init() {
 	hConsoleOut = os.Stdout
 
-	buf, e := ioutil.ReadFile("log.yaml")
+	buf, e := ioutil.ReadFile("log.json")
 	if e == nil {
 		var c1 configFile
-		yaml.Unmarshal(buf, &c1)
+		json.Unmarshal(buf, &c1)
 
 		if len(c1.OutputFlag) != 0 {
 			outputFlag = 0
@@ -66,13 +66,13 @@ func init() {
 
 		if c1.OutputLevel != "" {
 			switch strings.ToLower(c1.OutputLevel) {
-			case "debug":
+			case "debug", "dbg":
 				outputLevel = OutputLevel_Debug
 			case "info":
 				outputLevel = OutputLevel_Info
-			case "warn":
+			case "warn", "warning":
 				outputLevel = OutputLevel_Warn
-			case "error":
+			case "error", "err":
 				outputLevel = OutputLevel_Error
 			case "unexpected":
 				outputLevel = OutputLevel_Unexpected
