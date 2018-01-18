@@ -3,6 +3,7 @@ package logx
 import (
 	"fmt"
 	"gopkg.in/yaml.v2"
+	"io"
 	"io/ioutil"
 	"log"
 	"os"
@@ -14,12 +15,14 @@ import (
 )
 
 var (
-	hFile       *os.File
-	logFile     = log.New(nil, "", log.Lshortfile|log.Ldate|log.Ltime)
-	logPath     string
-	logCounter  = 0
-	outputFlag  = OutputFlag_File | OutputFlag_Console | OutputFlag_DbgView
-	outputLevel = OutputLevel_Debug
+	hFile            *os.File
+	hConsoleOut      io.Writer
+	consoleOutPrefix []byte
+	logPath          string
+	logFile          = log.New(nil, "", log.Lshortfile|log.Ldate|log.Ltime)
+	logCounter       = 0
+	outputFlag       = OutputFlag_File | OutputFlag_Console | OutputFlag_DbgView
+	outputLevel      = OutputLevel_Debug
 )
 
 const (
@@ -40,6 +43,8 @@ type configFile struct {
 }
 
 func init() {
+	hConsoleOut = os.Stdout
+
 	buf, e := ioutil.ReadFile("log.yaml")
 	if e == nil {
 		var c1 configFile
@@ -142,7 +147,10 @@ func output(s string) {
 	}
 
 	if outputFlag&OutputFlag_Console != 0 {
-		fmt.Print(s)
+		if len(consoleOutPrefix) != 0 {
+			hConsoleOut.Write(consoleOutPrefix)
+		}
+		hConsoleOut.Write([]byte(s))
 	}
 
 	if outputFlag&OutputFlag_DbgView != 0 {
@@ -237,16 +245,31 @@ func SetLogPath(s string) {
 	logPath = s
 }
 
+// OutputFlag_File | OutputFlag_Console | OutputFlag_DbgView
 func SetOutputFlag(flag int) {
 	output(fmt.Sprintf("Log Level: %v Flag: %v", outputLevel, flag))
 	outputFlag = flag
 }
 
+// OutputLevel_Debug
+// OutputLevel_Info
+// OutputLevel_Warn
+// OutputLevel_Error
+// OutputLevel_Unexpected
 func SetOutputLevel(level int) {
 	output(fmt.Sprintf("Log Level: %v Flag: %v", level, outputFlag))
 	outputLevel = level
 }
 
-func SetFalg(flag int) {
+// Lshortfile | Ldate | Ltime
+func SetTimeFlag(flag int) {
 	logFile.SetFlags(flag)
+}
+
+func SetConsoleOut(out io.Writer) {
+	hConsoleOut = out
+}
+
+func SetConsoleOutPrefix(prefix []byte) {
+	consoleOutPrefix = prefix
 }
