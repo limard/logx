@@ -6,6 +6,10 @@ import (
 	"encoding/json"
 )
 
+func TestTrace(t *testing.T) {
+	Trace()
+}
+
 func TestName(t *testing.T) {
 	SetOutputFlag(OutputFlag_File)
 
