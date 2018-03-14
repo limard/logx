@@ -1,6 +1,7 @@
 package logx
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -11,7 +12,6 @@ import (
 	"runtime"
 	"strings"
 	"time"
-	"encoding/json"
 )
 
 var (
@@ -25,6 +25,7 @@ var (
 	outputLevel      = OutputLevel_Debug
 )
 
+// const value
 const (
 	OutputFlag_File = 1 << iota
 	OutputFlag_Console
@@ -81,11 +82,13 @@ func init() {
 	}
 }
 
-func getLogFile(fDir string) *os.File {
-	os.MkdirAll(fDir, 0666)
+func getLogFile(fDir string) (*os.File, error) {
+	e := os.MkdirAll(fDir, 0666)
+	if e != nil {
+		return nil, e
+	}
 
 	file, _ := exec.LookPath(os.Args[0])
-	filename := fDir + filepath.Base(file) + `.` + time.Now().Format(`060102_150405`) + `.log`
 
 	filepath.Walk(fDir, func(fPath string, fInfo os.FileInfo, err error) error {
 		if err != nil {
@@ -102,35 +105,76 @@ func getLogFile(fDir string) *os.File {
 		return nil
 	})
 
-	logfile, _ := os.OpenFile(filename, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0666)
-	return logfile
+	filename := fDir + filepath.Base(file) + `.` + time.Now().Format(`060102_150405`) + `.log`
+	logfile, e := os.OpenFile(filename, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0666)
+	if e != nil {
+		return nil, e
+	}
+	return logfile, nil
 }
 
-func renewLogFile() {
-	if logCounter != 0 && logCounter < 100 {
+func renewLogFile() (e error) {
+	if hFile != nil && logCounter < 100 {
 		logCounter++
-		return
+		return nil
 	}
 	logCounter = 1
 
 	if logPath == "" {
-		logPath = getBisPath()
+		logPath = getDefaultLogPath()
 	}
 
 	if hFile == nil {
-		hFile = getLogFile(logPath)
+		hFile, e = getLogFile(logPath)
+		if e != nil {
+			return e
+		}
 	}
 
 	fi, _ := hFile.Stat()
 	if fi.Size() > 1024*1024*5 {
 		hFile.Close()
-		hFile = getLogFile(logPath)
+		hFile, e = getLogFile(logPath)
+		if e != nil {
+			return e
+		}
 	}
+
+	if hFile == nil {
+		return fmt.Errorf("hFile is nil")
+	}
+
 	logFile.SetOutput(hFile)
+	return nil
 }
 
+func output(s string) {
+	s = addNewLine(s)
 
+	if outputFlag&OutputFlag_File != 0 {
+		e := renewLogFile()
+		if e != nil {
+			es := addNewLine(e.Error())
+			hConsoleOut.Write([]byte(es))
+			outputToDebugView([]byte(es))
+		} else {
+			logFile.Output(3, s)
+		}
+	}
 
+	if outputFlag&OutputFlag_Console != 0 {
+		if len(consoleOutPrefix) != 0 {
+			hConsoleOut.Write(consoleOutPrefix)
+		}
+		hConsoleOut.Write([]byte(s))
+	}
+
+	if outputFlag&OutputFlag_DbgView != 0 {
+		outputToDebugView([]byte("[BIS]" + s))
+	}
+}
+
+// Trace output a [DEBUG] trace string
 func Trace() {
 	if outputLevel > OutputLevel_Debug {
 		return
@@ -146,6 +190,7 @@ func Trace() {
 	output(fmt.Sprintf("[TRACE]%v", funcName))
 }
 
+// Debug output a [DEBUG] string
 func Debug(v ...interface{}) {
 	if outputLevel > OutputLevel_Debug {
 		return
@@ -153,6 +198,7 @@ func Debug(v ...interface{}) {
 	output(fmt.Sprintf(`[DEBUG]%s`, fmt.Sprint(v...)))
 }
 
+// Debugf output a [DEBUG] string with format
 func Debugf(format string, v ...interface{}) {
 	if outputLevel > OutputLevel_Debug {
 		return
@@ -160,6 +206,7 @@ func Debugf(format string, v ...interface{}) {
 	output(fmt.Sprintf(`[DEBUG]`+format, v...))
 }
 
+// Info output a [INFO ] string
 func Info(v ...interface{}) {
 	if outputLevel > OutputLevel_Info {
 		return
@@ -167,6 +214,7 @@ func Info(v ...interface{}) {
 	output(fmt.Sprintf(`[INFO ]%s`, fmt.Sprint(v...)))
 }
 
+// Infof output a [INFO ] string with format
 func Infof(format string, v ...interface{}) {
 	if outputLevel > OutputLevel_Info {
 		return
@@ -174,6 +222,7 @@ func Infof(format string, v ...interface{}) {
 	output(fmt.Sprintf(`[INFO ]`+format, v...))
 }
 
+// Warn output a [WARN ] string
 func Warn(v ...interface{}) {
 	if outputLevel > OutputLevel_Warn {
 		return
@@ -181,6 +230,7 @@ func Warn(v ...interface{}) {
 	output(fmt.Sprintf(`[WARN ]%s`, fmt.Sprint(v...)))
 }
 
+// Warnf output a [WARN ] string with format
 func Warnf(format string, v ...interface{}) {
 	if outputLevel > OutputLevel_Warn {
 		return
@@ -188,6 +238,7 @@ func Warnf(format string, v ...interface{}) {
 	output(fmt.Sprintf(`[WARN ]`+format, v...))
 }
 
+// Error output a [ERROR] string
 func Error(v ...interface{}) {
 	if outputLevel > OutputLevel_Error {
 		return
@@ -195,6 +246,7 @@ func Error(v ...interface{}) {
 	output(fmt.Sprintf(`[ERROR]%s`, fmt.Sprint(v...)))
 }
 
+// Errorf output a [ERROR] string with format
 func Errorf(format string, v ...interface{}) {
 	if outputLevel > OutputLevel_Error {
 		return
@@ -202,6 +254,7 @@ func Errorf(format string, v ...interface{}) {
 	output(fmt.Sprintf(`[ERROR]`+format, v...))
 }
 
+// Unexpected output a [UNEXP] string
 func Unexpected(v ...interface{}) {
 	if outputLevel > OutputLevel_Unexpected {
 		return
@@ -209,6 +262,7 @@ func Unexpected(v ...interface{}) {
 	output(fmt.Sprintf(`[UNEXP]%s`, fmt.Sprint(v...)))
 }
 
+// Unexpectedf output a [UNEXP] string with format
 func Unexpectedf(format string, v ...interface{}) {
 	if outputLevel > OutputLevel_Unexpected {
 		return
@@ -216,16 +270,18 @@ func Unexpectedf(format string, v ...interface{}) {
 	output(fmt.Sprintf(`[UNEXP]`+format, v...))
 }
 
+// SetLogPath set path of output log
 func SetLogPath(s string) {
 	logPath = s
 }
 
-// OutputFlag_File | OutputFlag_Console | OutputFlag_DbgView
+// SetOutputFlag set output purpose(OutputFlag_File | OutputFlag_Console | OutputFlag_DbgView)
 func SetOutputFlag(flag int) {
 	output(fmt.Sprintf("Log Level: %v Flag: %v", outputLevel, flag))
 	outputFlag = flag
 }
 
+// SetOutputLevel set output level.
 // OutputLevel_Debug
 // OutputLevel_Info
 // OutputLevel_Warn
@@ -236,15 +292,17 @@ func SetOutputLevel(level int) {
 	outputLevel = level
 }
 
-// Lshortfile | Ldate | Ltime
+// SetTimeFlag set time format(Lshortfile | Ldate | Ltime)
 func SetTimeFlag(flag int) {
 	logFile.SetFlags(flag)
 }
 
+// SetConsoleOut set a writer instead of console
 func SetConsoleOut(out io.Writer) {
 	hConsoleOut = out
 }
 
+// SetConsoleOutPrefix set prefix for console output
 func SetConsoleOutPrefix(prefix []byte) {
 	consoleOutPrefix = prefix
 }
