@@ -106,7 +106,8 @@ func getLogFile(fDir string) (*os.File, error) {
 	})
 
 	filename := fDir + filepath.Base(file) + `.` + time.Now().Format(`060102_150405`) + `.log`
-	logfile, e := os.OpenFile(filename, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0666)
+	// linux: 该目录所有模块可写、创建、删除、不能读（只保留6天），用户只读
+	logfile, e := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0442)
 	if e != nil {
 		return nil, e
 	}

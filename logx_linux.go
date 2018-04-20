@@ -6,7 +6,8 @@ import "time"
 
 func getDefaultLogPath() string {
 	//s := `/opt/PrintSystem/Log/`
-	return `/var/log/rundebug/bis/`
+	//return `/var/log/rundebug/bis/`
+	return `/var/log/bis/`
 }
 
 var LogSaveTime = 6 * 24 * time.Hour
