@@ -158,6 +158,9 @@ func output(s string) {
 			es := addNewLine(e.Error())
 			hConsoleOut.Write([]byte(es))
 			outputToDebugView([]byte(es))
+			if strings.Contains(e.Error(), "permission denied") {
+				outputFlag &= ^OutputFlag_File
+			}
 		} else {
 			logFile.Output(3, s)
 		}
