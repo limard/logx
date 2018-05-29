@@ -14,17 +14,6 @@ import (
 	"time"
 )
 
-var (
-	hFile            *os.File
-	hConsoleOut      io.Writer
-	consoleOutPrefix []byte
-	logPath          string
-	logFile          = log.New(nil, "", log.Lshortfile|log.Ldate|log.Ltime)
-	logCounter       = 0
-	outputFlag       = OutputFlag_File | OutputFlag_Console | OutputFlag_DbgView
-	outputLevel      = OutputLevel_Debug
-)
-
 // const value
 const (
 	OutputFlag_File = 1 << iota
@@ -38,29 +27,59 @@ const (
 	OutputLevel_Unexpected = 500
 )
 
-type configFile struct {
-	OutputLevel string
-	OutputFlag  []string
+//type Loggerx struct
+type Loggerx struct {
+	hFile            *os.File
+	hConsoleOut      io.Writer
+	consoleOutPrefix []byte
+	logPath          string // log的保存目录
+	logName          string // log的文件名，默认为程序名
+	logFile          *log.Logger
+	logCounter       int
+	outputFlag       int
+	outputLevel      int
 }
 
-func init() {
-	hConsoleOut = os.Stdout
+func New(path, name string) *Loggerx {
+	l := new(Loggerx)
+	l.logPath = path
+	l.logName = name
+	l.logFile = log.New(nil, "", log.Lshortfile|log.Ldate|log.Ltime)
+	l.logCounter = 0
+	l.outputFlag = OutputFlag_File | OutputFlag_Console | OutputFlag_DbgView
+	l.outputLevel = OutputLevel_Debug
 
+	l.hConsoleOut = os.Stdout
+
+	if len(l.logPath) == 0 {
+		l.logPath = getDefaultLogPath()
+	}
+
+	if len(l.logName) == 0 {
+		n, _ := exec.LookPath(os.Args[0])
+		l.logName = filepath.Base(n)
+	}
+
+	//
+	type configFile struct {
+		OutputLevel string
+		OutputFlag  []string
+	}
 	buf, e := ioutil.ReadFile("log.json")
 	if e == nil {
 		var c1 configFile
 		json.Unmarshal(buf, &c1)
 
 		if len(c1.OutputFlag) != 0 {
-			outputFlag = 0
+			l.outputFlag = 0
 			for _, f := range c1.OutputFlag {
 				switch strings.ToLower(f) {
 				case "file":
-					outputFlag |= OutputFlag_File
+					l.outputFlag |= OutputFlag_File
 				case "console":
-					outputFlag |= OutputFlag_Console
+					l.outputFlag |= OutputFlag_Console
 				case "dbgview":
-					outputFlag |= OutputFlag_DbgView
+					l.outputFlag |= OutputFlag_DbgView
 				}
 			}
 		}
@@ -68,221 +87,113 @@ func init() {
 		if c1.OutputLevel != "" {
 			switch strings.ToLower(c1.OutputLevel) {
 			case "debug", "dbg":
-				outputLevel = OutputLevel_Debug
+				l.outputLevel = OutputLevel_Debug
 			case "info":
-				outputLevel = OutputLevel_Info
+				l.outputLevel = OutputLevel_Info
 			case "warn", "warning":
-				outputLevel = OutputLevel_Warn
+				l.outputLevel = OutputLevel_Warn
 			case "error", "err":
-				outputLevel = OutputLevel_Error
+				l.outputLevel = OutputLevel_Error
 			case "unexpected":
-				outputLevel = OutputLevel_Unexpected
+				l.outputLevel = OutputLevel_Unexpected
 			}
 		}
 	}
+
+	return l
 }
 
-func getLogFile(fDir string) (*os.File, error) {
-	e := os.MkdirAll(fDir, 0666)
-	if e != nil {
-		return nil, e
-	}
-
-	file, _ := exec.LookPath(os.Args[0])
-
-	filepath.Walk(fDir, func(fPath string, fInfo os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if fInfo.IsDir() {
-			return nil
-		}
-		if strings.Contains(filepath.Base(fPath), filepath.Base(file)) {
-			if time.Now().Sub(fInfo.ModTime()) > LogSaveTime {
-				os.Remove(fPath)
-			}
-		}
-		return nil
-	})
-
-	filename := fDir + filepath.Base(file) + `.` + time.Now().Format(`060102_150405`) + `.log`
-	// linux: 该目录所有模块可写、创建、删除、不能读（只保留6天），用户只读
-	logfile, e := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0442)
-	if e != nil {
-		return nil, e
-	}
-	return logfile, nil
+func (t *Loggerx) Trace() {
+	t.trace()
 }
 
-func renewLogFile() (e error) {
-	if hFile != nil && logCounter < 100 {
-		logCounter++
-		return nil
-	}
-	logCounter = 1
-
-	if logPath == "" {
-		logPath = getDefaultLogPath()
-	}
-
-	if hFile == nil {
-		hFile, e = getLogFile(logPath)
-		if e != nil {
-			return e
-		}
-	}
-
-	fi, _ := hFile.Stat()
-	if fi.Size() > 1024*1024*5 {
-		hFile.Close()
-		hFile, e = getLogFile(logPath)
-		if e != nil {
-			return e
-		}
-	}
-
-	if hFile == nil {
-		return fmt.Errorf("hFile is nil")
-	}
-
-	logFile.SetOutput(hFile)
-	return nil
-}
-
-func output(s string) {
-	s = addNewLine(s)
-
-	if outputFlag&OutputFlag_File != 0 {
-		e := renewLogFile()
-		if e != nil {
-			es := addNewLine(e.Error())
-			hConsoleOut.Write([]byte(es))
-			outputToDebugView([]byte(es))
-			if strings.Contains(e.Error(), "permission denied") {
-				outputFlag &= ^OutputFlag_File
-			}
-		} else {
-			logFile.Output(3, s)
-		}
-	}
-
-	if outputFlag&OutputFlag_Console != 0 {
-		if len(consoleOutPrefix) != 0 {
-			hConsoleOut.Write(consoleOutPrefix)
-		}
-		hConsoleOut.Write([]byte(s))
-	}
-
-	if outputFlag&OutputFlag_DbgView != 0 {
-		outputToDebugView([]byte("[BIS]" + s))
-	}
-}
-
-// Trace output a [DEBUG] trace string
-func Trace() {
-	if outputLevel > OutputLevel_Debug {
+func (t *Loggerx) trace() {
+	if t.outputLevel > OutputLevel_Debug {
 		return
 	}
 
 	funcName := ""
-	pc, _, _, ok := runtime.Caller(1)
+	pc, _, _, ok := runtime.Caller(2)
 	if ok {
 		funcName = runtime.FuncForPC(pc).Name()
 		s := strings.Split(funcName, ".")
 		funcName = s[len(s)-1]
 	}
-	output(fmt.Sprintf("[TRACE]%v", funcName))
+	t.output(fmt.Sprintf("[TRACE]%v", funcName))
 }
 
 // Debug output a [DEBUG] string
-func Debug(v ...interface{}) {
-	if outputLevel > OutputLevel_Debug {
+func (t *Loggerx) Debug(v ...interface{}) {
+	if t.outputLevel > OutputLevel_Debug {
 		return
 	}
-	output(fmt.Sprintf(`[DEBUG]%s`, fmt.Sprint(v...)))
+	t.output(fmt.Sprintf(`[DEBUG]%s`, fmt.Sprint(v...)))
 }
 
 // Debugf output a [DEBUG] string with format
-func Debugf(format string, v ...interface{}) {
-	if outputLevel > OutputLevel_Debug {
+func (t *Loggerx) Debugf(format string, v ...interface{}) {
+	if t.outputLevel > OutputLevel_Debug {
 		return
 	}
-	output(fmt.Sprintf(`[DEBUG]`+format, v...))
+	t.output(fmt.Sprintf(`[DEBUG]`+format, v...))
 }
 
 // Info output a [INFO ] string
-func Info(v ...interface{}) {
-	if outputLevel > OutputLevel_Info {
+func (t *Loggerx) Info(v ...interface{}) {
+	if t.outputLevel > OutputLevel_Info {
 		return
 	}
-	output(fmt.Sprintf(`[INFO ]%s`, fmt.Sprint(v...)))
+	t.output(fmt.Sprintf(`[INFO ]%s`, fmt.Sprint(v...)))
 }
 
 // Infof output a [INFO ] string with format
-func Infof(format string, v ...interface{}) {
-	if outputLevel > OutputLevel_Info {
+func (t *Loggerx) Infof(format string, v ...interface{}) {
+	if t.outputLevel > OutputLevel_Info {
 		return
 	}
-	output(fmt.Sprintf(`[INFO ]`+format, v...))
+	t.output(fmt.Sprintf(`[INFO ]`+format, v...))
 }
 
 // Warn output a [WARN ] string
-func Warn(v ...interface{}) {
-	if outputLevel > OutputLevel_Warn {
+func (t *Loggerx) Warn(v ...interface{}) {
+	if t.outputLevel > OutputLevel_Warn {
 		return
 	}
-	output(fmt.Sprintf(`[WARN ]%s`, fmt.Sprint(v...)))
+	t.output(fmt.Sprintf(`[WARN ]%s`, fmt.Sprint(v...)))
 }
 
 // Warnf output a [WARN ] string with format
-func Warnf(format string, v ...interface{}) {
-	if outputLevel > OutputLevel_Warn {
+func (t *Loggerx) Warnf(format string, v ...interface{}) {
+	if t.outputLevel > OutputLevel_Warn {
 		return
 	}
-	output(fmt.Sprintf(`[WARN ]`+format, v...))
+	t.output(fmt.Sprintf(`[WARN ]`+format, v...))
 }
 
 // Error output a [ERROR] string
-func Error(v ...interface{}) {
-	if outputLevel > OutputLevel_Error {
+func (t *Loggerx) Error(v ...interface{}) {
+	if t.outputLevel > OutputLevel_Error {
 		return
 	}
-	output(fmt.Sprintf(`[ERROR]%s`, fmt.Sprint(v...)))
+	t.output(fmt.Sprintf(`[ERROR]%s`, fmt.Sprint(v...)))
 }
 
 // Errorf output a [ERROR] string with format
-func Errorf(format string, v ...interface{}) {
-	if outputLevel > OutputLevel_Error {
+func (t *Loggerx) Errorf(format string, v ...interface{}) {
+	if t.outputLevel > OutputLevel_Error {
 		return
 	}
-	output(fmt.Sprintf(`[ERROR]`+format, v...))
-}
-
-// Unexpected output a [UNEXP] string
-func Unexpected(v ...interface{}) {
-	if outputLevel > OutputLevel_Unexpected {
-		return
-	}
-	output(fmt.Sprintf(`[UNEXP]%s`, fmt.Sprint(v...)))
-}
-
-// Unexpectedf output a [UNEXP] string with format
-func Unexpectedf(format string, v ...interface{}) {
-	if outputLevel > OutputLevel_Unexpected {
-		return
-	}
-	output(fmt.Sprintf(`[UNEXP]`+format, v...))
+	t.output(fmt.Sprintf(`[ERROR]`+format, v...))
 }
 
 // SetLogPath set path of output log
-func SetLogPath(s string) {
-	logPath = s
+func (t *Loggerx) SetLogPath(s string) {
+	t.logPath = s
 }
 
 // SetOutputFlag set output purpose(OutputFlag_File | OutputFlag_Console | OutputFlag_DbgView)
-func SetOutputFlag(flag int) {
-	output(fmt.Sprintf("Log Level: %v Flag: %v", outputLevel, flag))
-	outputFlag = flag
+func (t *Loggerx) SetOutputFlag(flag int) {
+	t.outputFlag = flag
 }
 
 // SetOutputLevel set output level.
@@ -291,22 +202,112 @@ func SetOutputFlag(flag int) {
 // OutputLevel_Warn
 // OutputLevel_Error
 // OutputLevel_Unexpected
-func SetOutputLevel(level int) {
-	output(fmt.Sprintf("Log Level: %v Flag: %v", level, outputFlag))
-	outputLevel = level
+func (t *Loggerx) SetOutputLevel(level int) {
+	t.output(fmt.Sprintf("Log Level: %v Flag: %v", level, t.outputFlag))
+	t.outputLevel = level
 }
 
 // SetTimeFlag set time format(Lshortfile | Ldate | Ltime)
-func SetTimeFlag(flag int) {
-	logFile.SetFlags(flag)
+func (t *Loggerx) SetTimeFlag(flag int) {
+	t.logFile.SetFlags(flag)
 }
 
 // SetConsoleOut set a writer instead of console
-func SetConsoleOut(out io.Writer) {
-	hConsoleOut = out
+func (t *Loggerx) SetConsoleOut(out io.Writer) {
+	t.hConsoleOut = out
 }
 
 // SetConsoleOutPrefix set prefix for console output
-func SetConsoleOutPrefix(prefix []byte) {
-	consoleOutPrefix = prefix
+func (t *Loggerx) SetConsoleOutPrefix(prefix []byte) {
+	t.consoleOutPrefix = prefix
+}
+
+func (t *Loggerx) getFileHandle() (error) {
+	e := os.MkdirAll(t.logPath, 0666)
+	if e != nil {
+		return e
+	}
+
+	filepath.Walk(t.logPath, func(fPath string, fInfo os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if fInfo.IsDir() {
+			return nil
+		}
+		if strings.Contains(filepath.Base(fPath), t.logName) {
+			if time.Now().Sub(fInfo.ModTime()) > LogSaveTime {
+				os.Remove(fPath)
+			}
+		}
+		return nil
+	})
+
+	filename := t.logPath + t.logName + `.` + time.Now().Format(`060102_150405`) + `.log`
+	// linux: 该目录所有模块可写、创建、删除、不能读（只保留6天），用户只读
+	t.hFile, e = os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0442)
+	if e != nil {
+		return e
+	}
+	return nil
+}
+
+func (t *Loggerx) renewLogFile() (e error) {
+	if t.hFile != nil && t.logCounter < 100 {
+		t.logCounter++
+		return nil
+	}
+	t.logCounter = 1
+
+	if t.hFile == nil {
+		e = t.getFileHandle()
+		if e != nil {
+			return e
+		}
+	}
+
+	fi, _ := t.hFile.Stat()
+	if fi.Size() > 1024*1024*5 {
+		t.hFile.Close()
+		e = t.getFileHandle()
+		if e != nil {
+			return e
+		}
+	}
+
+	if t.hFile == nil {
+		return fmt.Errorf("hFile is nil")
+	}
+
+	t.logFile.SetOutput(t.hFile)
+	return nil
+}
+
+func (t *Loggerx) output(s string) {
+	s = addNewLine(s)
+
+	if t.outputFlag&OutputFlag_File != 0 {
+		e := t.renewLogFile()
+		if e != nil {
+			es := addNewLine(e.Error())
+			t.hConsoleOut.Write([]byte(es))
+			outputToDebugView([]byte(es))
+			if strings.Contains(e.Error(), "permission denied") {
+				t.outputFlag &= ^OutputFlag_File
+			}
+		} else {
+			t.logFile.Output(3, s)
+		}
+	}
+
+	if t.outputFlag&OutputFlag_Console != 0 {
+		if len(t.consoleOutPrefix) != 0 {
+			t.hConsoleOut.Write(t.consoleOutPrefix)
+		}
+		t.hConsoleOut.Write([]byte(s))
+	}
+
+	if t.outputFlag&OutputFlag_DbgView != 0 {
+		outputToDebugView([]byte("[BIS]" + s))
+	}
 }
