@@ -14,42 +14,42 @@ func Trace() {
 
 // Debug output a [DEBUG] string
 func Debug(v ...interface{}) {
-	logxSTD.Debug(v)
+	logxSTD.debug(v)
 }
 
 // Debugf output a [DEBUG] string with format
 func Debugf(format string, v ...interface{}) {
-	logxSTD.Debugf(format, v)
+	logxSTD.debugf(format, v)
 }
 
 // Info output a [INFO ] string
 func Info(v ...interface{}) {
-	logxSTD.Info(v)
+	logxSTD.info(v)
 }
 
 // Infof output a [INFO ] string with format
 func Infof(format string, v ...interface{}) {
-	logxSTD.Infof(format, v)
+	logxSTD.infof(format, v)
 }
 
 // Warn output a [WARN ] string
 func Warn(v ...interface{}) {
-	logxSTD.Warn(v)
+	logxSTD.warn(v)
 }
 
 // Warnf output a [WARN ] string with format
 func Warnf(format string, v ...interface{}) {
-	logxSTD.Warnf(format, v)
+	logxSTD.warnf(format, v)
 }
 
 // Error output a [ERROR] string
 func Error(v ...interface{}) {
-	logxSTD.Error(v)
+	logxSTD.error(v)
 }
 
 // Errorf output a [ERROR] string with format
 func Errorf(format string, v ...interface{}) {
-	logxSTD.Errorf(format, v)
+	logxSTD.errorf(format, v)
 }
 
 // SetLogPath set path of output log

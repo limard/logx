@@ -124,6 +124,10 @@ func (t *Loggerx) trace() {
 
 // Debug output a [DEBUG] string
 func (t *Loggerx) Debug(v ...interface{}) {
+	t.debug(v)
+}
+
+func (t *Loggerx) debug(v ...interface{}) {
 	if t.outputLevel > OutputLevel_Debug {
 		return
 	}
@@ -132,6 +136,10 @@ func (t *Loggerx) Debug(v ...interface{}) {
 
 // Debugf output a [DEBUG] string with format
 func (t *Loggerx) Debugf(format string, v ...interface{}) {
+	t.debugf(format, v)
+}
+
+func (t *Loggerx) debugf(format string, v ...interface{}) {
 	if t.outputLevel > OutputLevel_Debug {
 		return
 	}
@@ -139,7 +147,11 @@ func (t *Loggerx) Debugf(format string, v ...interface{}) {
 }
 
 // Info output a [INFO ] string
-func (t *Loggerx) Info(v ...interface{}) {
+func (t *Loggerx) Info(v ...interface{}){
+	t.info(v)
+}
+
+func (t *Loggerx) info(v ...interface{}) {
 	if t.outputLevel > OutputLevel_Info {
 		return
 	}
@@ -148,6 +160,10 @@ func (t *Loggerx) Info(v ...interface{}) {
 
 // Infof output a [INFO ] string with format
 func (t *Loggerx) Infof(format string, v ...interface{}) {
+	t.Infof(format, v)
+}
+
+func (t *Loggerx) infof(format string, v ...interface{}) {
 	if t.outputLevel > OutputLevel_Info {
 		return
 	}
@@ -156,6 +172,10 @@ func (t *Loggerx) Infof(format string, v ...interface{}) {
 
 // Warn output a [WARN ] string
 func (t *Loggerx) Warn(v ...interface{}) {
+	t.Warn(v)
+}
+
+func (t *Loggerx) warn(v ...interface{}) {
 	if t.outputLevel > OutputLevel_Warn {
 		return
 	}
@@ -163,7 +183,11 @@ func (t *Loggerx) Warn(v ...interface{}) {
 }
 
 // Warnf output a [WARN ] string with format
-func (t *Loggerx) Warnf(format string, v ...interface{}) {
+func (t *Loggerx) Warnf(format string, v ...interface{}){
+	t.warnf(format, v)
+}
+
+func (t *Loggerx) warnf(format string, v ...interface{}) {
 	if t.outputLevel > OutputLevel_Warn {
 		return
 	}
@@ -172,6 +196,10 @@ func (t *Loggerx) Warnf(format string, v ...interface{}) {
 
 // Error output a [ERROR] string
 func (t *Loggerx) Error(v ...interface{}) {
+	t.error(v)
+}
+
+func (t *Loggerx) error(v ...interface{}) {
 	if t.outputLevel > OutputLevel_Error {
 		return
 	}
@@ -180,6 +208,10 @@ func (t *Loggerx) Error(v ...interface{}) {
 
 // Errorf output a [ERROR] string with format
 func (t *Loggerx) Errorf(format string, v ...interface{}) {
+	t.errorf(format, v)
+}
+
+func (t *Loggerx) errorf(format string, v ...interface{}) {
 	if t.outputLevel > OutputLevel_Error {
 		return
 	}
@@ -296,7 +328,7 @@ func (t *Loggerx) output(s string) {
 				t.outputFlag &= ^OutputFlag_File
 			}
 		} else {
-			t.logFile.Output(3, s)
+			t.logFile.Output(4, s)
 		}
 	}
 
