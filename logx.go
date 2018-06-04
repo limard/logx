@@ -124,7 +124,7 @@ func (t *Loggerx) trace() {
 
 // Debug output a [DEBUG] string
 func (t *Loggerx) Debug(v ...interface{}) {
-	t.debug(v)
+	t.debug(v...)
 }
 
 func (t *Loggerx) debug(v ...interface{}) {
@@ -136,7 +136,7 @@ func (t *Loggerx) debug(v ...interface{}) {
 
 // Debugf output a [DEBUG] string with format
 func (t *Loggerx) Debugf(format string, v ...interface{}) {
-	t.debugf(format, v)
+	t.debugf(format, v...)
 }
 
 func (t *Loggerx) debugf(format string, v ...interface{}) {
@@ -148,7 +148,7 @@ func (t *Loggerx) debugf(format string, v ...interface{}) {
 
 // Info output a [INFO ] string
 func (t *Loggerx) Info(v ...interface{}){
-	t.info(v)
+	t.info(v...)
 }
 
 func (t *Loggerx) info(v ...interface{}) {
@@ -160,7 +160,7 @@ func (t *Loggerx) info(v ...interface{}) {
 
 // Infof output a [INFO ] string with format
 func (t *Loggerx) Infof(format string, v ...interface{}) {
-	t.Infof(format, v)
+	t.infof(format, v...)
 }
 
 func (t *Loggerx) infof(format string, v ...interface{}) {
@@ -172,7 +172,7 @@ func (t *Loggerx) infof(format string, v ...interface{}) {
 
 // Warn output a [WARN ] string
 func (t *Loggerx) Warn(v ...interface{}) {
-	t.Warn(v)
+	t.warn(v...)
 }
 
 func (t *Loggerx) warn(v ...interface{}) {
@@ -184,7 +184,7 @@ func (t *Loggerx) warn(v ...interface{}) {
 
 // Warnf output a [WARN ] string with format
 func (t *Loggerx) Warnf(format string, v ...interface{}){
-	t.warnf(format, v)
+	t.warnf(format, v...)
 }
 
 func (t *Loggerx) warnf(format string, v ...interface{}) {
@@ -196,7 +196,7 @@ func (t *Loggerx) warnf(format string, v ...interface{}) {
 
 // Error output a [ERROR] string
 func (t *Loggerx) Error(v ...interface{}) {
-	t.error(v)
+	t.error(v...)
 }
 
 func (t *Loggerx) error(v ...interface{}) {
@@ -208,7 +208,7 @@ func (t *Loggerx) error(v ...interface{}) {
 
 // Errorf output a [ERROR] string with format
 func (t *Loggerx) Errorf(format string, v ...interface{}) {
-	t.errorf(format, v)
+	t.errorf(format, v...)
 }
 
 func (t *Loggerx) errorf(format string, v ...interface{}) {
