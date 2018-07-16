@@ -235,7 +235,6 @@ func (t *Loggerx) SetOutputFlag(flag int) {
 // OutputLevel_Error
 // OutputLevel_Unexpected
 func (t *Loggerx) SetOutputLevel(level int) {
-	t.output(fmt.Sprintf("Log Level: %v Flag: %v", level, t.outputFlag))
 	t.outputLevel = level
 }
 

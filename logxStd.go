@@ -1,7 +1,6 @@
 package logx
 
 import (
-	"fmt"
 	"io"
 )
 
@@ -69,7 +68,6 @@ func SetOutputFlag(flag int) {
 // OutputLevel_Error
 // OutputLevel_Unexpected
 func SetOutputLevel(level int) {
-	logxSTD.output(fmt.Sprintf("Log Level: %v Flag: %v", level, logxSTD.outputFlag))
 	logxSTD.SetOutputLevel(level)
 }
 
