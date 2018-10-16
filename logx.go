@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"time"
 )
@@ -147,7 +148,7 @@ func (t *Loggerx) debugf(format string, v ...interface{}) {
 }
 
 // Info output a [INFO ] string
-func (t *Loggerx) Info(v ...interface{}){
+func (t *Loggerx) Info(v ...interface{}) {
 	t.info(v...)
 }
 
@@ -183,7 +184,7 @@ func (t *Loggerx) warn(v ...interface{}) {
 }
 
 // Warnf output a [WARN ] string with format
-func (t *Loggerx) Warnf(format string, v ...interface{}){
+func (t *Loggerx) Warnf(format string, v ...interface{}) {
 	t.warnf(format, v...)
 }
 
@@ -253,26 +254,30 @@ func (t *Loggerx) SetConsoleOutPrefix(prefix []byte) {
 	t.consoleOutPrefix = prefix
 }
 
-func (t *Loggerx) getFileHandle() (error) {
+func (t *Loggerx) getFileHandle() error {
 	e := os.MkdirAll(t.logPath, 0666)
 	if e != nil {
 		return e
 	}
 
+	files := make([]string, 0)
 	filepath.Walk(t.logPath, func(fPath string, fInfo os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
-		if fInfo.IsDir() {
+		if fInfo.IsDir() || strings.Contains(filepath.Base(fPath), t.logName) == false {
 			return nil
 		}
-		if strings.Contains(filepath.Base(fPath), t.logName) {
-			if time.Now().Sub(fInfo.ModTime()) > LogSaveTime {
-				os.Remove(fPath)
-			}
+		if time.Now().Sub(fInfo.ModTime()) > LogSaveTime {
+			os.Remove(fPath)
+			return nil
 		}
+		files = append(files, fInfo.Name())
 		return nil
 	})
+	for _, value := range t.getNeedDeleteLogfile(files) {
+		os.Remove(t.logPath + `\` + value)
+	}
 
 	filename := t.logPath + t.logName + `.` + time.Now().Format(`060102_150405`) + `.log`
 	// linux: 该目录所有模块可写、创建、删除、不能读（只保留6天），用户只读
@@ -281,6 +286,19 @@ func (t *Loggerx) getFileHandle() (error) {
 		return e
 	}
 	return nil
+}
+
+func (t *Loggerx) getNeedDeleteLogfile(filesName []string) []string {
+	if len(filesName) < 6 {
+		return nil
+	}
+	sort.Strings(filesName)
+
+	result := make([]string, 0)
+	for i := 0; i < len(filesName)-6; i++ {
+		result = append(result, filesName[i])
+	}
+	return result
 }
 
 func (t *Loggerx) renewLogFile() (e error) {
