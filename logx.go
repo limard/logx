@@ -147,6 +147,28 @@ func (t *Loggerx) debugf(format string, v ...interface{}) {
 	t.output(fmt.Sprintf(`[DEBUG]`+format, v...))
 }
 
+func (t *Loggerx) DebugToJson(v ... interface{}) {
+	t.debugToJson(v...)
+}
+
+func (t *Loggerx) debugToJson(v ... interface{}) {
+	if t.outputLevel > OutputLevel_Debug {
+		return
+	}
+
+	ss := []string{`[DEBUG]`}
+	for _, sub := range v {
+		switch sub.(type) {
+		case string:
+			ss = append(ss, sub.(string))
+		default:
+			buf, _  := json.Marshal(sub)
+			ss = append(ss, string(buf))
+		}
+	}
+	t.output(strings.Join(ss, " "))
+}
+
 // Info output a [INFO ] string
 func (t *Loggerx) Info(v ...interface{}) {
 	t.info(v...)

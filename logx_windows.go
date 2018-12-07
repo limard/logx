@@ -11,7 +11,7 @@ import (
 // Bis path
 
 func getDefaultLogPath() string {
-	s, e := getCommmonAppDataDirectory()
+	s, e := getCommonAppDataDirectory()
 	if e != nil {
 		s = `C:\log`
 	}
@@ -24,11 +24,11 @@ func getDefaultLogPath() string {
 var LogSaveTime = 6 * 24 * time.Hour
 
 var (
-	dshell32                = syscall.NewLazyDLL("Shell32.dll")
-	pSHGetSpecialFolderPath = dshell32.NewProc("SHGetSpecialFolderPathW")
+	dShell32                = syscall.NewLazyDLL("Shell32.dll")
+	pSHGetSpecialFolderPath = dShell32.NewProc("SHGetSpecialFolderPathW")
 )
 
-func getCommmonAppDataDirectory() (string, error) {
+func getCommonAppDataDirectory() (string, error) {
 	const CSIDL_COMMON_APPDATA = 0x23
 	return shGetSpecialFolderPath(CSIDL_COMMON_APPDATA)
 }

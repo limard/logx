@@ -34,3 +34,11 @@ func TestSort(t *testing.T) {
 	files = logxSTD.getNeedDeleteLogfile(files)
 	t.Log(files)
 }
+
+func TestLoggerx_DebugToJson(t *testing.T) {
+	type WE struct {
+		A string
+	}
+	we := WE{"123qwe"}
+	DebugToJson("SQ", we)
+}

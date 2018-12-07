@@ -21,6 +21,10 @@ func Debugf(format string, v ...interface{}) {
 	logxSTD.debugf(format, v...)
 }
 
+func DebugToJson(v ...interface{}) {
+	logxSTD.debugToJson(v...)
+}
+
 // Info output a [INFO ] string
 func Info(v ...interface{}) {
 	logxSTD.info(v...)
