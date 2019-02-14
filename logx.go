@@ -287,7 +287,7 @@ func (t *Loggerx) getFileHandle() error {
 		if err != nil {
 			return err
 		}
-		if fInfo.IsDir() || strings.Contains(filepath.Base(fPath), t.logName) == false {
+		if fInfo.IsDir() || strings.HasPrefix(filepath.Base(fPath), t.logName) == false {
 			return nil
 		}
 		if time.Now().Sub(fInfo.ModTime()) > LogSaveTime {
@@ -298,6 +298,7 @@ func (t *Loggerx) getFileHandle() error {
 		return nil
 	})
 	for _, value := range t.getNeedDeleteLogfile(files) {
+		fmt.Println("delete log file:", value)
 		os.Remove(t.logPath + `\` + value)
 	}
 
