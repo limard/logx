@@ -104,6 +104,17 @@ func New(path, name string) *Loggerx {
 	return l
 }
 
+func funcName() string {
+	funcName := ""
+	pc, _, _, ok := runtime.Caller(3)
+	if ok {
+		funcName = runtime.FuncForPC(pc).Name()
+		s := strings.Split(funcName, ".")
+		funcName = s[len(s)-1]
+	}
+	return funcName
+}
+
 func (t *Loggerx) Trace() {
 	t.trace()
 }
@@ -113,14 +124,7 @@ func (t *Loggerx) trace() {
 		return
 	}
 
-	funcName := ""
-	pc, _, _, ok := runtime.Caller(2)
-	if ok {
-		funcName = runtime.FuncForPC(pc).Name()
-		s := strings.Split(funcName, ".")
-		funcName = s[len(s)-1]
-	}
-	t.output(fmt.Sprintf("[TRACE]%v", funcName))
+	t.output(fmt.Sprintf("[TRACE][%s]", funcName()))
 }
 
 // Debug output a [DEBUG] string
@@ -132,7 +136,7 @@ func (t *Loggerx) debug(v ...interface{}) {
 	if t.outputLevel > OutputLevel_Debug {
 		return
 	}
-	t.output(fmt.Sprintf(`[DEBUG]%s`, fmt.Sprint(v...)))
+	t.output(fmt.Sprintf(`[DEBUG][%s]%s`, funcName(), fmt.Sprint(v...)))
 }
 
 // Debugf output a [DEBUG] string with format
@@ -144,29 +148,28 @@ func (t *Loggerx) debugf(format string, v ...interface{}) {
 	if t.outputLevel > OutputLevel_Debug {
 		return
 	}
-	t.output(fmt.Sprintf(`[DEBUG]`+format, v...))
+	t.output(fmt.Sprintf(fmt.Sprintf(`[DEBUG][%s]%s`, funcName(), format), v...))
 }
 
-func (t *Loggerx) DebugToJson(v ... interface{}) {
+func (t *Loggerx) DebugToJson(v ...interface{}) {
 	t.debugToJson(v...)
 }
 
-func (t *Loggerx) debugToJson(v ... interface{}) {
+func (t *Loggerx) debugToJson(v ...interface{}) {
 	if t.outputLevel > OutputLevel_Debug {
 		return
 	}
-
-	ss := []string{`[DEBUG]`}
+	ss := []string{`[DEBUG]`, `[` + funcName() + `]`}
 	for _, sub := range v {
 		switch sub.(type) {
 		case string:
 			ss = append(ss, sub.(string))
 		default:
-			buf, _  := json.Marshal(sub)
+			buf, _ := json.Marshal(sub)
 			ss = append(ss, string(buf))
 		}
 	}
-	t.output(strings.Join(ss, " "))
+	t.output(strings.Join(ss, ""))
 }
 
 // Info output a [INFO ] string
@@ -178,7 +181,7 @@ func (t *Loggerx) info(v ...interface{}) {
 	if t.outputLevel > OutputLevel_Info {
 		return
 	}
-	t.output(fmt.Sprintf(`[INFO ]%s`, fmt.Sprint(v...)))
+	t.output(fmt.Sprintf(`[INFO ][%s]%s`, funcName(), fmt.Sprint(v...)))
 }
 
 // Infof output a [INFO ] string with format
@@ -190,7 +193,7 @@ func (t *Loggerx) infof(format string, v ...interface{}) {
 	if t.outputLevel > OutputLevel_Info {
 		return
 	}
-	t.output(fmt.Sprintf(`[INFO ]`+format, v...))
+	t.output(fmt.Sprintf(fmt.Sprintf(`[INFO ][%s]%s`, funcName(), format), v...))
 }
 
 // Warn output a [WARN ] string
@@ -202,7 +205,7 @@ func (t *Loggerx) warn(v ...interface{}) {
 	if t.outputLevel > OutputLevel_Warn {
 		return
 	}
-	t.output(fmt.Sprintf(`[WARN ]%s`, fmt.Sprint(v...)))
+	t.output(fmt.Sprintf(`[WARN ][%s]%s`, funcName(), fmt.Sprint(v...)))
 }
 
 // Warnf output a [WARN ] string with format
@@ -214,7 +217,7 @@ func (t *Loggerx) warnf(format string, v ...interface{}) {
 	if t.outputLevel > OutputLevel_Warn {
 		return
 	}
-	t.output(fmt.Sprintf(`[WARN ]`+format, v...))
+	t.output(fmt.Sprintf(fmt.Sprintf(`[WARN ][%s]%s`, funcName(), format), v...))
 }
 
 // Error output a [ERROR] string
@@ -226,7 +229,7 @@ func (t *Loggerx) error(v ...interface{}) {
 	if t.outputLevel > OutputLevel_Error {
 		return
 	}
-	t.output(fmt.Sprintf(`[ERROR]%s`, fmt.Sprint(v...)))
+	t.output(fmt.Sprintf(`[ERROR][%s]%s`, funcName(), fmt.Sprint(v...)))
 }
 
 // Errorf output a [ERROR] string with format
@@ -238,7 +241,7 @@ func (t *Loggerx) errorf(format string, v ...interface{}) {
 	if t.outputLevel > OutputLevel_Error {
 		return
 	}
-	t.output(fmt.Sprintf(`[ERROR]`+format, v...))
+	t.output(fmt.Sprintf(fmt.Sprintf(`[ERROR][%s]%s`, funcName(), format), v...))
 }
 
 // SetLogPath set path of output log
