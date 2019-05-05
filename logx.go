@@ -30,7 +30,7 @@ const (
 
 //type Loggerx struct
 type Loggerx struct {
-	hFile            *os.File
+	OutFile          *os.File
 	hConsoleOut      io.Writer
 	consoleOutPrefix []byte
 	logPath          string // log的保存目录
@@ -39,6 +39,8 @@ type Loggerx struct {
 	logCounter       int
 	outputFlag       int
 	outputLevel      int
+	LastError        error
+	FilePerm         os.FileMode
 }
 
 func New(path, name string) *Loggerx {
@@ -49,6 +51,7 @@ func New(path, name string) *Loggerx {
 	l.logCounter = 0
 	l.outputFlag = OutputFlag_File | OutputFlag_Console | OutputFlag_DbgView
 	l.outputLevel = OutputLevel_Debug
+	l.FilePerm = 0666
 
 	l.hConsoleOut = os.Stdout
 
@@ -280,8 +283,9 @@ func (t *Loggerx) SetConsoleOutPrefix(prefix []byte) {
 }
 
 func (t *Loggerx) getFileHandle() error {
-	e := os.MkdirAll(t.logPath, 0666)
+	e := os.MkdirAll(t.logPath, t.FilePerm)
 	if e != nil {
+		t.LastError = e
 		return e
 	}
 
@@ -306,9 +310,9 @@ func (t *Loggerx) getFileHandle() error {
 	}
 
 	filename := t.logPath + t.logName + `.` + time.Now().Format(`060102_150405`) + `.log`
-	// linux: 该目录所有模块可写、创建、删除、不能读（只保留6天），用户只读
-	t.hFile, e = os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0442)
+	t.OutFile, e = os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, t.FilePerm)
 	if e != nil {
+		t.LastError = e
 		return e
 	}
 	return nil
@@ -328,33 +332,33 @@ func (t *Loggerx) getNeedDeleteLogfile(filesName []string) []string {
 }
 
 func (t *Loggerx) renewLogFile() (e error) {
-	if t.hFile != nil && t.logCounter < 100 {
+	if t.OutFile != nil && t.logCounter < 100 {
 		t.logCounter++
 		return nil
 	}
 	t.logCounter = 1
 
-	if t.hFile == nil {
+	if t.OutFile == nil {
 		e = t.getFileHandle()
 		if e != nil {
 			return e
 		}
 	}
 
-	fi, _ := t.hFile.Stat()
+	fi, _ := t.OutFile.Stat()
 	if fi.Size() > 1024*1024*5 {
-		t.hFile.Close()
+		t.OutFile.Close()
 		e = t.getFileHandle()
 		if e != nil {
 			return e
 		}
 	}
 
-	if t.hFile == nil {
-		return fmt.Errorf("hFile is nil")
+	if t.OutFile == nil {
+		return fmt.Errorf("OutFile is nil")
 	}
 
-	t.logFile.SetOutput(t.hFile)
+	t.logFile.SetOutput(t.OutFile)
 	return nil
 }
 
@@ -365,7 +369,9 @@ func (t *Loggerx) output(s string) {
 		e := t.renewLogFile()
 		if e != nil {
 			es := addNewLine(e.Error())
-			t.hConsoleOut.Write([]byte(es))
+			if t.hConsoleOut != nil {
+				t.hConsoleOut.Write([]byte(es))
+			}
 			outputToDebugView([]byte(es))
 			if strings.Contains(e.Error(), "permission denied") {
 				t.outputFlag &= ^OutputFlag_File
@@ -375,7 +381,7 @@ func (t *Loggerx) output(s string) {
 		}
 	}
 
-	if t.outputFlag&OutputFlag_Console != 0 {
+	if t.outputFlag&OutputFlag_Console != 0 && t.hConsoleOut != nil {
 		if len(t.consoleOutPrefix) != 0 {
 			t.hConsoleOut.Write(t.consoleOutPrefix)
 		}
