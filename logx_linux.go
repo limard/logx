@@ -2,7 +2,10 @@
 
 package logx
 
-import "time"
+import (
+	"os"
+	"time"
+)
 
 var (
 	defaultFilePerm = os.FileMode(0224)
