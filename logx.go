@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -26,32 +26,43 @@ const (
 	OutputLevel_Warn       = 300
 	OutputLevel_Error      = 400
 	OutputLevel_Unexpected = 500
+
+	Ldate         = 1 << iota     // the date in the local time zone: 2009/01/23
+	Ltime                         // the time in the local time zone: 01:23:23
+	Lmicroseconds                 // microsecond resolution: 01:23:23.123123.  assumes Ltime.
+	Llongfile                     // full file name and line number: /a/b/c/d.go:23
+	Lshortfile                    // final file name element and line number: d.go:23. overrides Llongfile
+	LUTC                          // if Ldate or Ltime is set, use UTC rather than the local time zone
+	LstdFlags     = Ldate | Ltime // initial values for the standard logger
 )
 
 //type Loggerx struct
 type Loggerx struct {
-	OutFile          *os.File
-	hConsoleOut      io.Writer
-	consoleOutPrefix []byte
-	logPath          string // log的保存目录
-	logName          string // log的文件名，默认为程序名
-	logFile          *log.Logger
-	logCounter       int
-	outputFlag       int
-	outputLevel      int
-	LastError        error
-	FilePerm         os.FileMode
+	OutFile   *os.File
+	LastError error
+	FilePerm  os.FileMode
+
+	hConsoleOut io.Writer
+	logPath     string // log的保存目录
+	logName     string // log的文件名，默认为程序名
+	logCounter  int
+	outputFlag  int
+	outputLevel int
+	mu          sync.Mutex // ensures atomic writes; protects the following fields
+	prefix      []byte     // prefix to write at beginning of each line
+	flag        int        // properties
+	buf         []byte     // for accumulating text to write
 }
 
 func New(path, name string) *Loggerx {
 	l := new(Loggerx)
 	l.logPath = path
 	l.logName = name
-	l.logFile = log.New(nil, "", log.Lshortfile|log.Ldate|log.Ltime)
 	l.logCounter = 0
 	l.outputFlag = OutputFlag_File | OutputFlag_Console | OutputFlag_DbgView
 	l.outputLevel = OutputLevel_Debug
 	l.FilePerm = 0666
+	l.flag = Lshortfile | Ldate | Ltime
 
 	l.hConsoleOut = os.Stdout
 
@@ -269,7 +280,7 @@ func (t *Loggerx) SetOutputLevel(level int) {
 
 // SetTimeFlag set time format(Lshortfile | Ldate | Ltime)
 func (t *Loggerx) SetTimeFlag(flag int) {
-	t.logFile.SetFlags(flag)
+	t.flag = flag
 }
 
 // SetConsoleOut set a writer instead of console
@@ -279,7 +290,7 @@ func (t *Loggerx) SetConsoleOut(out io.Writer) {
 
 // SetConsoleOutPrefix set prefix for console output
 func (t *Loggerx) SetConsoleOutPrefix(prefix []byte) {
-	t.consoleOutPrefix = prefix
+	t.prefix = prefix
 }
 
 func (t *Loggerx) getFileHandle() error {
@@ -357,13 +368,13 @@ func (t *Loggerx) renewLogFile() (e error) {
 	if t.OutFile == nil {
 		return fmt.Errorf("OutFile is nil")
 	}
-
-	t.logFile.SetOutput(t.OutFile)
 	return nil
 }
 
 func (t *Loggerx) output(s string) {
 	s = addNewLine(s)
+
+	buf := t.makeStr(4, s)
 
 	if t.outputFlag&OutputFlag_File != 0 {
 		e := t.renewLogFile()
@@ -377,18 +388,109 @@ func (t *Loggerx) output(s string) {
 				t.outputFlag &= ^OutputFlag_File
 			}
 		} else {
-			t.logFile.Output(4, s)
+			t.OutFile.Write(buf)
 		}
 	}
 
 	if t.outputFlag&OutputFlag_Console != 0 && t.hConsoleOut != nil {
-		if len(t.consoleOutPrefix) != 0 {
-			t.hConsoleOut.Write(t.consoleOutPrefix)
-		}
-		t.hConsoleOut.Write([]byte(s))
+		t.hConsoleOut.Write(buf)
 	}
 
 	if t.outputFlag&OutputFlag_DbgView != 0 {
 		outputToDebugView([]byte("[BIS]" + s))
 	}
+}
+
+// Cheap integer to fixed-width decimal ASCII. Give a negative width to avoid zero-padding.
+func itoa(buf *[]byte, i int, wid int) {
+	// Assemble decimal in reverse order.
+	var b [20]byte
+	bp := len(b) - 1
+	for i >= 10 || wid > 1 {
+		wid--
+		q := i / 10
+		b[bp] = byte('0' + i - q*10)
+		bp--
+		i = q
+	}
+	// i < 10
+	b[bp] = byte('0' + i)
+	*buf = append(*buf, b[bp:]...)
+}
+
+// formatHeader writes log header to buf in following order:
+//   * l.prefix (if it's not blank),
+//   * date and/or time (if corresponding flags are provided),
+//   * file and line number (if corresponding flags are provided).
+func (t *Loggerx) formatHeader(buf *[]byte, tm time.Time, file string, line int) {
+	*buf = append(*buf, t.prefix...)
+	if t.flag&(Ldate|Ltime|Lmicroseconds) != 0 {
+		if t.flag&LUTC != 0 {
+			tm = tm.UTC()
+		}
+		if t.flag&Ldate != 0 {
+			year, month, day := tm.Date()
+			itoa(buf, year, 4)
+			*buf = append(*buf, '/')
+			itoa(buf, int(month), 2)
+			*buf = append(*buf, '/')
+			itoa(buf, day, 2)
+			*buf = append(*buf, ' ')
+		}
+		if t.flag&(Ltime|Lmicroseconds) != 0 {
+			hour, min, sec := tm.Clock()
+			itoa(buf, hour, 2)
+			*buf = append(*buf, ':')
+			itoa(buf, min, 2)
+			*buf = append(*buf, ':')
+			itoa(buf, sec, 2)
+			if t.flag&Lmicroseconds != 0 {
+				*buf = append(*buf, '.')
+				itoa(buf, tm.Nanosecond()/1e3, 6)
+			}
+			*buf = append(*buf, ' ')
+		}
+	}
+	if t.flag&(Lshortfile|Llongfile) != 0 {
+		if t.flag&Lshortfile != 0 {
+			short := file
+			for i := len(file) - 1; i > 0; i-- {
+				if file[i] == '/' {
+					short = file[i+1:]
+					break
+				}
+			}
+			file = short
+		}
+		*buf = append(*buf, file...)
+		*buf = append(*buf, ':')
+		itoa(buf, line, -1)
+		*buf = append(*buf, ": "...)
+	}
+}
+
+func (t *Loggerx) makeStr(calldepth int, s string) []byte {
+	now := time.Now() // get this early.
+	var file string
+	var line int
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.flag&(Lshortfile|Llongfile) != 0 {
+		// Release lock while getting caller info - it's expensive.
+		t.mu.Unlock()
+		var ok bool
+		_, file, line, ok = runtime.Caller(calldepth)
+		if !ok {
+			file = "???"
+			line = 0
+		}
+		t.mu.Lock()
+	}
+	t.buf = t.buf[:0]
+	t.formatHeader(&t.buf, now, file, line)
+	t.buf = append(t.buf, s...)
+	if len(s) == 0 || s[len(s)-1] != '\n' {
+		t.buf = append(t.buf, '\n')
+	}
+	return t.buf
 }
