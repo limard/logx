@@ -61,7 +61,7 @@ func New(path, name string) *Loggerx {
 	l.logCounter = 0
 	l.outputFlag = OutputFlag_File | OutputFlag_Console | OutputFlag_DbgView
 	l.outputLevel = OutputLevel_Debug
-	l.FilePerm = 0666
+	l.FilePerm = defaultFilePerm
 	l.flag = Lshortfile | Ldate | Ltime
 
 	l.hConsoleOut = os.Stdout
@@ -294,7 +294,7 @@ func (t *Loggerx) SetConsoleOutPrefix(prefix []byte) {
 }
 
 func (t *Loggerx) getFileHandle() error {
-	e := os.MkdirAll(t.logPath, t.FilePerm)
+	e := os.MkdirAll(t.logPath, 0666)
 	if e != nil {
 		t.LastError = e
 		return e

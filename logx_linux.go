@@ -4,6 +4,10 @@ package logx
 
 import "time"
 
+var (
+	defaultFilePerm = os.FileMode(0224)
+)
+
 func getDefaultLogPath() string {
 	return `/var/log/rundebug/bis/`
 }

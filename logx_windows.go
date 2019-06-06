@@ -3,12 +3,15 @@
 package logx
 
 import (
+	"os"
 	"syscall"
 	"time"
 	"unsafe"
 )
 
-// Bis path
+var (
+	defaultFilePerm = os.FileMode(0666)
+)
 
 func getDefaultLogPath() string {
 	s, e := getCommonAppDataDirectory()
