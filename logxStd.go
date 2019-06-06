@@ -57,7 +57,11 @@ func Errorf(format string, v ...interface{}) {
 
 // SetLogPath set path of output log
 func SetLogPath(s string) {
-	logxSTD.SetLogPath(s)
+	logxSTD.logPath = s
+}
+
+func SetExeName(s string) {
+	logxSTD.logName = s
 }
 
 // SetOutputFlag set output purpose(OutputFlag_File | OutputFlag_Console | OutputFlag_DbgView)
