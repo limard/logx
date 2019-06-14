@@ -52,6 +52,7 @@ type Loggerx struct {
 	prefix      []byte     // prefix to write at beginning of each line
 	flag        int        // properties
 	buf         []byte     // for accumulating text to write
+	muFile      sync.Mutex
 }
 
 func New(path, name string) *Loggerx {
@@ -348,6 +349,9 @@ func (t *Loggerx) renewLogFile() (e error) {
 		return nil
 	}
 	t.logCounter = 1
+
+	t.muFile.Lock()
+	defer t.muFile.Unlock()
 
 	if t.OutFile == nil {
 		e = t.getFileHandle()
