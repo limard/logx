@@ -295,7 +295,7 @@ func (t *Loggerx) SetConsoleOutPrefix(prefix []byte) {
 }
 
 func (t *Loggerx) getFileHandle() error {
-	e := os.MkdirAll(t.logPath, 0666)
+	e := os.MkdirAll(t.logPath, 0777)
 	if e != nil {
 		t.LastError = e
 		return e
@@ -317,7 +317,7 @@ func (t *Loggerx) getFileHandle() error {
 		return nil
 	})
 	for _, value := range t.getNeedDeleteLogfile(files) {
-		fmt.Println("delete log file:", value)
+		//fmt.Println("delete log file:", value)
 		os.Remove(t.logPath + `\` + value)
 	}
 
@@ -392,7 +392,9 @@ func (t *Loggerx) output(s string) {
 				t.outputFlag &= ^OutputFlag_File
 			}
 		} else {
+			t.muFile.Lock()
 			t.OutFile.Write(buf)
+			t.muFile.Unlock()
 		}
 	}
 

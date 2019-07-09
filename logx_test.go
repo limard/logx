@@ -47,3 +47,11 @@ func TestLogx(t *testing.T) {
 	Debug("123", "456", "789")
 	Debugf("123 %s %s", "456", "789")
 }
+
+func TestCleanFile(t *testing.T) {
+	l := New("", "testCleanFile")
+	l.SetOutputFlag(OutputFlag_File)
+	for i := 0; i < 1000*1000; i++ {
+		l.Debug("1234567890qwertyuiopasdfghjklzxcvbnm,./[pljugftrdr4sdrtygfvhjkjvbbnghk")
+	}
+}
