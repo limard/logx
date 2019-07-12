@@ -57,16 +57,16 @@ func Errorf(format string, v ...interface{}) {
 
 // SetLogPath set path of output log
 func SetLogPath(s string) {
-	logxSTD.logPath = s
+	logxSTD.LogPath = s
 }
 
 func SetExeName(s string) {
-	logxSTD.logName = s
+	logxSTD.LogName = s
 }
 
 // SetOutputFlag set output purpose(OutputFlag_File | OutputFlag_Console | OutputFlag_DbgView)
 func SetOutputFlag(flag int) {
-	logxSTD.SetOutputFlag(flag)
+	logxSTD.OutputFlag = flag
 }
 
 // SetOutputLevel set output level.
@@ -76,17 +76,17 @@ func SetOutputFlag(flag int) {
 // OutputLevel_Error
 // OutputLevel_Unexpected
 func SetOutputLevel(level int) {
-	logxSTD.SetOutputLevel(level)
+	logxSTD.OutputLevel = level
 }
 
 // SetTimeFlag set time format(Lshortfile | Ldate | Ltime)
 func SetTimeFlag(flag int) {
-	logxSTD.SetTimeFlag(flag)
+	logxSTD.TimeFlag = flag
 }
 
 // SetConsoleOut set a writer instead of console
 func SetConsoleOut(out io.Writer) {
-	logxSTD.SetConsoleOut(out)
+	logxSTD.ConsoleOutWriter = out
 }
 
 // SetConsoleOutPrefix set prefix for console output
