@@ -8,7 +8,8 @@ import (
 )
 
 var (
-	defaultFilePerm = os.FileMode(0224)
+	//defaultFilePerm = os.FileMode(0224)
+	defaultFilePerm = os.FileMode(0666)
 )
 
 func getDefaultLogPath() string {
