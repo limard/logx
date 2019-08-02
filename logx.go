@@ -47,6 +47,8 @@ type Loggerx struct {
 	OutputFlag       int    // 输出Flag
 	OutputLevel      int    // 输出级别
 	TimeFlag         int    // properties
+	MaxLogNumber     int    // 最多log文件个数
+	ContinuousLog    bool   // 连续在上一个文件中输出，适用于经常被调用启动的程序日志
 	ConsoleOutWriter io.Writer
 
 	logCounter int
@@ -64,6 +66,7 @@ func New(path, name string) *Loggerx {
 		OutputFlag:       OutputFlag_File | OutputFlag_Console | OutputFlag_DbgView,
 		OutputLevel:      OutputLevel_Debug,
 		TimeFlag:         Lshortfile | Ldate | Ltime,
+		MaxLogNumber:     3,
 		LogName:          name,
 		logCounter:       0,
 		ConsoleOutWriter: os.Stdout,
@@ -289,12 +292,20 @@ func (t *Loggerx) getFileHandle() error {
 		return nil
 	})
 	for _, value := range t.getNeedDeleteLogfile(files) {
-		//fmt.Println("delete log file:", value)
 		os.Remove(t.LogPath + `\` + value)
 	}
 
-	filename := t.LogPath + t.LogName + `.` + time.Now().Format(`060102_150405`) + `.log`
-	t.OutFile, e = os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, t.FilePerm)
+	if t.ContinuousLog {
+		f := t.getNewestLogfile(files)
+		if len(f) > 0 {
+			filename := t.LogPath + `\` + f
+			t.OutFile, e = os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, t.FilePerm)
+		}
+	}
+	if t.OutFile == nil {
+		filename := t.LogPath + t.LogName + `.` + time.Now().Format(`060102_150405`) + `.log`
+		t.OutFile, e = os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, t.FilePerm)
+	}
 	if e != nil {
 		t.LastError = e
 		return e
@@ -302,17 +313,22 @@ func (t *Loggerx) getFileHandle() error {
 	return nil
 }
 
+// 获取同名Log中最老的数个
 func (t *Loggerx) getNeedDeleteLogfile(filesName []string) []string {
-	if len(filesName) < 6 {
+	if len(filesName) < t.MaxLogNumber {
 		return nil
 	}
 	sort.Strings(filesName)
+	return filesName[0 : len(filesName)-t.MaxLogNumber]
+}
 
-	result := make([]string, 0)
-	for i := 0; i < len(filesName)-6; i++ {
-		result = append(result, filesName[i])
+// 获取同名Log中最新的一个
+func (t *Loggerx) getNewestLogfile(filesName []string) string {
+	if len(filesName) == 0 {
+		return ""
 	}
-	return result
+	sort.Strings(filesName)
+	return filesName[len(filesName)-1]
 }
 
 func (t *Loggerx) renewLogFile() (e error) {
@@ -333,7 +349,7 @@ func (t *Loggerx) renewLogFile() (e error) {
 	}
 
 	fi, _ := t.OutFile.Stat()
-	if fi.Size() > 1024*1024*5 {
+	if fi.Size() > 1024*1024*3 {
 		t.OutFile.Close()
 		e = t.getFileHandle()
 		if e != nil {
