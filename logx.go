@@ -69,6 +69,7 @@ func New(path, name string) *Loggerx {
 		MaxLogNumber:     3,
 		LogName:          name,
 		logCounter:       0,
+		ContinuousLog:    true,
 		ConsoleOutWriter: os.Stdout,
 	}
 
