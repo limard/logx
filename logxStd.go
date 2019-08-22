@@ -88,8 +88,3 @@ func SetTimeFlag(flag int) {
 func SetConsoleOut(out io.Writer) {
 	logxSTD.ConsoleOutWriter = out
 }
-
-// SetConsoleOutPrefix set prefix for console output
-func SetConsoleOutPrefix(prefix []byte) {
-	logxSTD.SetConsoleOutPrefix(prefix)
-}

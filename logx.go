@@ -52,9 +52,7 @@ type Loggerx struct {
 	ConsoleOutWriter io.Writer
 
 	logCounter int
-	mu         sync.Mutex // ensures atomic writes; protects the following fields
-	prefix     []byte     // prefix to write at beginning of each line
-	buf        []byte     // for accumulating text to write
+	Prefix     []byte // Prefix to write at beginning of each line
 	muFile     sync.Mutex
 }
 
@@ -265,11 +263,6 @@ func (t *Loggerx) errorf(format string, v ...interface{}) {
 	t.output(fmt.Sprintf(fmt.Sprintf(`[ERROR][%s]%s`, funcName(), format), v...))
 }
 
-// SetConsoleOutPrefix set prefix for console output
-func (t *Loggerx) SetConsoleOutPrefix(prefix []byte) {
-	t.prefix = prefix
-}
-
 func (t *Loggerx) getFileHandle() error {
 	e := os.MkdirAll(t.LogPath, 0777)
 	if e != nil {
@@ -301,6 +294,7 @@ func (t *Loggerx) getFileHandle() error {
 		if len(f) > 0 {
 			filename := t.LogPath + `\` + f
 			t.OutFile, e = os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, t.FilePerm)
+			t.OutFile.Write([]byte("\r\n\r\n\r\n\r\n\r\n\r\n"))
 		}
 	}
 	if t.OutFile == nil {
@@ -412,11 +406,11 @@ func itoa(buf *[]byte, i int, wid int) {
 }
 
 // formatHeader writes log header to buf in following order:
-//   * l.prefix (if it's not blank),
+//   * l.Prefix (if it's not blank),
 //   * date and/or time (if corresponding flags are provided),
 //   * file and line number (if corresponding flags are provided).
 func (t *Loggerx) formatHeader(buf *[]byte, tm time.Time, file string, line int) {
-	*buf = append(*buf, t.prefix...)
+	*buf = append(*buf, t.Prefix...)
 	if t.TimeFlag&(Ldate|Ltime|Lmicroseconds) != 0 {
 		if t.TimeFlag&LUTC != 0 {
 			tm = tm.UTC()
@@ -466,32 +460,27 @@ func (t *Loggerx) makeStr(calldepth int, s string) []byte {
 	now := time.Now() // get this early.
 	var file string
 	var line int
-	t.mu.Lock()
-	defer t.mu.Unlock()
 	if t.TimeFlag&(Lshortfile|Llongfile) != 0 {
-		// Release lock while getting caller info - it's expensive.
-		t.mu.Unlock()
 		var ok bool
 		_, file, line, ok = runtime.Caller(calldepth)
 		if !ok {
 			file = "???"
 			line = 0
 		}
-		t.mu.Lock()
 	}
-	t.buf = t.buf[:0]
-	t.formatHeader(&t.buf, now, file, line)
+	var buf []byte
+	t.formatHeader(&buf, now, file, line)
 
 	// limit max length
 	if len(s) > t.LineMaxLength {
-		t.buf = append(t.buf, s[:t.LineMaxLength]...)
-		t.buf = append(t.buf, []byte(" ...")...)
+		buf = append(buf, s[:t.LineMaxLength]...)
+		buf = append(buf, []byte(" ...")...)
 	} else {
-		t.buf = append(t.buf, s...)
+		buf = append(buf, s...)
 	}
 
 	if len(s) < 2 || s[len(s)-2] != '\r' || s[len(s)-1] != '\n' {
-		t.buf = append(t.buf, '\r', '\n')
+		buf = append(buf, '\r', '\n')
 	}
-	return t.buf
+	return buf
 }
