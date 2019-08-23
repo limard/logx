@@ -286,13 +286,13 @@ func (t *Loggerx) getFileHandle() error {
 		return nil
 	})
 	for _, value := range t.getNeedDeleteLogfile(files) {
-		os.Remove(t.LogPath + `\` + value)
+		os.Remove(t.LogPath + value)
 	}
 
 	if t.ContinuousLog {
 		f := t.getNewestLogfile(files)
 		if len(f) > 0 {
-			filename := t.LogPath + `\` + f
+			filename := t.LogPath + f
 			t.OutFile, e = os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, t.FilePerm)
 			t.OutFile.Write([]byte("\r\n\r\n\r\n\r\n\r\n\r\n"))
 		}
