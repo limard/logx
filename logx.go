@@ -292,9 +292,12 @@ func (t *Loggerx) getFileHandle() error {
 	if t.ContinuousLog {
 		f := t.getNewestLogfile(files)
 		if len(f) > 0 {
-			filename := t.LogPath + f
-			t.OutFile, e = os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, t.FilePerm)
-			t.OutFile.Write([]byte("\r\n\r\n\r\n\r\n\r\n\r\n"))
+			fi, e := os.Stat(f)
+			if e == nil && fi.Size() < 1024*1024*3 {
+				filename := t.LogPath + f
+				t.OutFile, e = os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, t.FilePerm)
+				t.OutFile.Write([]byte("\r\n==================================================\r\n"))
+			}
 		}
 	}
 	if t.OutFile == nil {
@@ -346,6 +349,7 @@ func (t *Loggerx) renewLogFile() (e error) {
 	fi, _ := t.OutFile.Stat()
 	if fi.Size() > 1024*1024*3 {
 		t.OutFile.Close()
+		t.OutFile = nil
 		e = t.getFileHandle()
 		if e != nil {
 			return e

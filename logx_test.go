@@ -51,8 +51,8 @@ func TestLogx(t *testing.T) {
 func TestCleanFile(t *testing.T) {
 	l := New("", "testCleanFile")
 	l.OutputFlag = OutputFlag_File
-	l.LineMaxLength = 256
-	for i := 0; i < 1000; i++ {
+	l.LineMaxLength = 1024
+	for i := 0; i < 100000; i++ {
 		l.Debug("1234567890qwertyuiopasdfghjklzxcvbnm,./[pljugftrdr4sdrtygfdsssssssssssssssssssddddddddddddddddddddddfasdlqamdlmkwlqmkdwmqklmdkwlqmlkdmwkmdklwqmdklqmwkdwqmdklwmkldqmkwmdkqlwmlkdqmlkwdmqlkmdlkqmwlkdmkmlkmkhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddvhjkjvbbnghk")
 	}
 }
