@@ -4,6 +4,7 @@ package logx
 
 import (
 	"os"
+	"path/filepath"
 	"syscall"
 	"time"
 	"unsafe"
@@ -14,46 +15,11 @@ var (
 )
 
 func getDefaultLogPath() string {
-	s, e := getCommonAppDataDirectory()
-	if e != nil {
-		s = `C:\log`
-	}
-
-	s += `\PrintSystem\Log\`
-	return s
+	return filepath.Dir(os.Args[0])
 }
 
 // LogSaveTime ...
 var LogSaveTime = 6 * 24 * time.Hour
-
-var (
-	dShell32                = syscall.NewLazyDLL("Shell32.dll")
-	pSHGetSpecialFolderPath = dShell32.NewProc("SHGetSpecialFolderPathW")
-)
-
-func getCommonAppDataDirectory() (string, error) {
-	const CSIDL_COMMON_APPDATA = 0x23
-	return shGetSpecialFolderPath(CSIDL_COMMON_APPDATA)
-}
-
-func shGetSpecialFolderPath(nFolder int) (string, error) {
-	if err := pSHGetSpecialFolderPath.Find(); err != nil {
-		return "", err
-	}
-	pt := make([]uint16, syscall.MAX_PATH)
-	ret, _, err := pSHGetSpecialFolderPath.Call(
-		uintptr(0),
-		uintptr(unsafe.Pointer(&pt[0])),
-		uintptr(nFolder),
-		uintptr(1))
-	if ret != 0 {
-		err = nil
-	}
-
-	return syscall.UTF16ToString(pt), err
-}
-
-// OutputDebugStringW
 
 var (
 	dllKernel             = syscall.NewLazyDLL("Kernel32.dll")

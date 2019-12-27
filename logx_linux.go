@@ -8,12 +8,11 @@ import (
 )
 
 var (
-	//defaultFilePerm = os.FileMode(0224)
 	defaultFilePerm = os.FileMode(0666)
 )
 
 func getDefaultLogPath() string {
-	return `/var/log/rundebug/bis/`
+	return `/var/log/`
 }
 
 var LogSaveTime = 6 * 24 * time.Hour
