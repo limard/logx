@@ -2,6 +2,7 @@ package logx
 
 import (
 	"fmt"
+	"path/filepath"
 	"testing"
 )
 
@@ -55,4 +56,9 @@ func TestCleanFile(t *testing.T) {
 	for i := 0; i < 100000; i++ {
 		l.Debug("1234567890qwertyuiopasdfghjklzxcvbnm,./[pljugftrdr4sdrtygfdsssssssssssssssssssddddddddddddddddddddddfasdlqamdlmkwlqmkdwmqklmdkwlqmlkdmwkmdklwqmdklqmwkdwqmdklwmkldqmkwmdkqlwmlkdqmlkwdmqlkmdlkqmwlkdmkmlkmkhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddvhjkjvbbnghk")
 	}
+}
+
+func TestFilePathJoin(t *testing.T) {
+	t.Log(filepath.Join(`/var/log/bis`, `BIS`))
+	t.Log(filepath.Join(`/var/log/bis/`, `BIS`))
 }

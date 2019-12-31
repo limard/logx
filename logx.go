@@ -294,14 +294,14 @@ func (t *Loggerx) getFileHandle() error {
 		if len(f) > 0 {
 			fi, e := os.Stat(f)
 			if e == nil && fi.Size() < 1024*1024*3 {
-				filename := t.LogPath + f
+				filename := filepath.Join(t.LogPath, f)
 				t.OutFile, e = os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, t.FilePerm)
 				t.OutFile.Write([]byte("\r\n==================================================\r\n"))
 			}
 		}
 	}
 	if t.OutFile == nil {
-		filename := t.LogPath + t.LogName + `.` + time.Now().Format(`060102_150405`) + `.log`
+		filename := filepath.Join(t.LogPath, t.LogName+`.`+time.Now().Format(`060102_150405`)+`.log`)
 		t.OutFile, e = os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, t.FilePerm)
 	}
 	if e != nil {
