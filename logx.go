@@ -297,12 +297,12 @@ func (t *Loggerx) getFileHandle() error {
 			if e == nil && fi.Size() < 1024*1024*3 {
 				t.OutFile, e = os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, t.FilePerm)
 				if e != nil {
-					fmt.Println(e)
+					fmt.Println("logx:", e)
 				} else {
 					t.OutFile.Write([]byte("\r\n==================================================\r\n"))
 				}
 			} else if e != nil {
-				fmt.Println(e)
+				fmt.Println("logx:", e)
 			}
 		}
 	}
@@ -311,7 +311,7 @@ func (t *Loggerx) getFileHandle() error {
 		t.OutFile, e = os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, t.FilePerm)
 	}
 	if e != nil {
-		fmt.Println(e)
+		fmt.Println("logx:", e)
 		t.LastError = e
 		return e
 	}

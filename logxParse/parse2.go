@@ -35,7 +35,7 @@ func (t *parser2) Read(f func(data *LogxData) (e error)) error {
 				}
 				lastPos = len(buf)
 				if lastPos == 0 {
-					fmt.Println("err:", eRead)
+					fmt.Println("logx:", eRead)
 					return nil
 				}
 			}
@@ -58,7 +58,7 @@ func (t *parser2) Read(f func(data *LogxData) (e error)) error {
 						return ep
 					}
 				}
-				fmt.Println("err:", eRead)
+				fmt.Println("logx:", eRead)
 				return nil
 			}
 			buf = buf[lastPos+1:]
