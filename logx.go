@@ -275,7 +275,7 @@ func (t *Loggerx) getFileHandle() error {
 		if err != nil {
 			return err
 		}
-		if fInfo.IsDir() || strings.HasPrefix(filepath.Base(fPath), t.LogName+`.`) == false {
+		if fInfo.IsDir() || !strings.HasPrefix(fInfo.Name(), t.LogName+`.`) || !strings.HasSuffix(fInfo.Name(), ".log") {
 			return nil
 		}
 		if time.Now().Sub(fInfo.ModTime()) > LogSaveTime {
