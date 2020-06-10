@@ -60,7 +60,7 @@ func New(path, name string) *Loggerx {
 		FilePerm:         defaultFilePerm,
 		LineMaxLength:    1024,
 		LogPath:          path,
-		OutputFlag:       OutputFlag_File | OutputFlag_Console | OutputFlag_DbgView,
+		OutputFlag:       OutputFlag_File | OutputFlag_Console,
 		OutputLevel:      OutputLevel_Debug,
 		TimeFlag:         Lshortfile | Ldate | Ltime,
 		MaxLogNumber:     3,
@@ -97,8 +97,6 @@ func New(path, name string) *Loggerx {
 					l.OutputFlag |= OutputFlag_File
 				case "console":
 					l.OutputFlag |= OutputFlag_Console
-				case "dbgview":
-					l.OutputFlag |= OutputFlag_DbgView
 				}
 			}
 		}
