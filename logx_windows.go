@@ -5,9 +5,7 @@ package logx
 import (
 	"os"
 	"path/filepath"
-	"syscall"
 	"time"
-	"unsafe"
 )
 
 var (
@@ -20,16 +18,6 @@ func getDefaultLogPath() string {
 
 // LogSaveTime ...
 var LogSaveTime = 6 * 24 * time.Hour
-
-var (
-	dllKernel             = syscall.NewLazyDLL("Kernel32.dll")
-	procOutputDebugString = dllKernel.NewProc("OutputDebugStringW")
-)
-
-func outputToDebugView(buf []byte) {
-	p, _ := syscall.UTF16PtrFromString(string(buf))
-	procOutputDebugString.Call(uintptr(unsafe.Pointer(p)))
-}
 
 func addNewLine(s string) string {
 	l := len(s)

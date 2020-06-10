@@ -17,9 +17,6 @@ func getDefaultLogPath() string {
 
 var LogSaveTime = 6 * 24 * time.Hour
 
-func outputToDebugView(buf []byte) {
-}
-
 func addNewLine(s string) string {
 	l := len(s)
 	if l == 0 {

@@ -19,7 +19,6 @@ import (
 const (
 	OutputFlag_File = 1 << iota
 	OutputFlag_Console
-	OutputFlag_DbgView
 
 	OutputLevel_Debug      = 100
 	OutputLevel_Info       = 200
@@ -379,7 +378,6 @@ func (t *Loggerx) output(s string) {
 			if t.ConsoleOutWriter != nil {
 				t.ConsoleOutWriter.Write([]byte(es))
 			}
-			outputToDebugView([]byte(es))
 			if strings.Contains(e.Error(), "permission denied") {
 				t.OutputFlag &= ^OutputFlag_File
 			}
@@ -392,10 +390,6 @@ func (t *Loggerx) output(s string) {
 
 	if t.OutputFlag&OutputFlag_Console != 0 && t.ConsoleOutWriter != nil {
 		t.ConsoleOutWriter.Write(buf)
-	}
-
-	if t.OutputFlag&OutputFlag_DbgView != 0 {
-		outputToDebugView([]byte("[BIS]" + s))
 	}
 }
 
@@ -494,4 +488,18 @@ func (t *Loggerx) makeStr(calldepth int, s string) []byte {
 		buf = append(buf, '\r', '\n')
 	}
 	return buf
+}
+
+// For log
+func (t *Loggerx) Print(v ...interface{}) {
+	t.debug(v...)
+}
+func (t *Loggerx) Println(v ...interface{}) {
+	t.debug(v...)
+}
+func (t *Loggerx) Printf(format string, v ...interface{}) {
+	t.debugf(format, v...)
+}
+func (t *Loggerx) Fatal(v ...interface{}) {
+	t.error(v...)
 }
