@@ -11,6 +11,7 @@ func TestTrace(t *testing.T) {
 	Debugf("Debug %v %v", "123", "456")
 
 	l := New("", "Logx.Obj")
+	l.PrefixFlag = 0
 	l.Trace()
 	l.Debugf("Debug %v %v", "123", "456")
 }

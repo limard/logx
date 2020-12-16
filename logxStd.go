@@ -81,7 +81,7 @@ func SetOutputLevel(level int) {
 
 // SetTimeFlag set time format(Lshortfile | Ldate | Ltime)
 func SetTimeFlag(flag int) {
-	logxSTD.TimeFlag = flag
+	logxSTD.PrefixFlag = flag
 }
 
 // SetConsoleOut set a writer instead of console

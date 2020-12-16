@@ -33,6 +33,8 @@ const (
 	Lshortfile                    // final file name element and line number: d.go:23. overrides Llongfile
 	LUTC                          // if Ldate or Ltime is set, use UTC rather than the local time zone
 	LstdFlags     = Ldate | Ltime // initial values for the standard logger
+	LfuncName
+	Llevel
 )
 
 //type Loggerx struct
@@ -45,7 +47,7 @@ type Loggerx struct {
 	LogName          string // log的文件名，默认为程序名
 	OutputFlag       int    // 输出Flag
 	OutputLevel      int    // 输出级别
-	TimeFlag         int    // properties
+	PrefixFlag       int    // properties
 	MaxLogNumber     int    // 最多log文件个数
 	ContinuousLog    bool   // 连续在上一个文件中输出，适用于经常被调用启动的程序日志
 	ConsoleOutWriter io.Writer
@@ -62,7 +64,7 @@ func New(path, name string) *Loggerx {
 		LogPath:          path,
 		OutputFlag:       OutputFlag_File | OutputFlag_Console,
 		OutputLevel:      OutputLevel_Debug,
-		TimeFlag:         Lshortfile | Ldate | Ltime,
+		PrefixFlag:       Lshortfile | LstdFlags | LfuncName | Llevel,
 		MaxLogNumber:     3,
 		LogName:          name,
 		logCounter:       0,
@@ -120,15 +122,19 @@ func New(path, name string) *Loggerx {
 	return l
 }
 
-func funcName() string {
-	funcName := ""
-	pc, _, _, ok := runtime.Caller(3)
-	if ok {
-		funcName = runtime.FuncForPC(pc).Name()
-		s := strings.Split(funcName, ".")
-		funcName = s[len(s)-1]
+func (t *Loggerx) prefix(level string) (prefix string) {
+	if t.PrefixFlag & Llevel != 0 {
+		prefix = "[" + level + "]"
 	}
-	return funcName
+	if t.PrefixFlag & LfuncName != 0 {
+		pc, _, _, ok := runtime.Caller(3)
+		if ok {
+			funcName := runtime.FuncForPC(pc).Name()
+			s := strings.Split(funcName, ".")
+			prefix += "[" + s[len(s)-1] + "]"
+		}
+	}
+	return
 }
 
 func (t *Loggerx) Trace() {
@@ -140,7 +146,7 @@ func (t *Loggerx) trace() {
 		return
 	}
 
-	t.output(fmt.Sprintf("[TRACE][%s]", funcName()))
+	t.output(fmt.Sprintf("%s", t.prefix("TRACE")))
 }
 
 // Debug output a [DEBUG] string
@@ -152,7 +158,7 @@ func (t *Loggerx) debug(v ...interface{}) {
 	if t.OutputLevel > OutputLevel_Debug {
 		return
 	}
-	t.output(fmt.Sprintf(`[DEBUG][%s]%s`, funcName(), fmt.Sprint(v...)))
+	t.output(fmt.Sprintf(`%s%s`, t.prefix("DEBUG"), fmt.Sprint(v...)))
 }
 
 // Debugf output a [DEBUG] string with format
@@ -164,7 +170,7 @@ func (t *Loggerx) debugf(format string, v ...interface{}) {
 	if t.OutputLevel > OutputLevel_Debug {
 		return
 	}
-	t.output(fmt.Sprintf(fmt.Sprintf(`[DEBUG][%s]%s`, funcName(), format), v...))
+	t.output(fmt.Sprintf(fmt.Sprintf(`%s%s`, t.prefix("DEBUG"), format), v...))
 }
 
 func (t *Loggerx) DebugToJson(v ...interface{}) {
@@ -175,7 +181,7 @@ func (t *Loggerx) debugToJson(v ...interface{}) {
 	if t.OutputLevel > OutputLevel_Debug {
 		return
 	}
-	ss := []string{`[DEBUG]`, `[` + funcName() + `]`}
+	ss := []string{t.prefix("DEBUG")}
 	for _, sub := range v {
 		switch sub.(type) {
 		case string:
@@ -197,7 +203,7 @@ func (t *Loggerx) info(v ...interface{}) {
 	if t.OutputLevel > OutputLevel_Info {
 		return
 	}
-	t.output(fmt.Sprintf(`[INFO ][%s]%s`, funcName(), fmt.Sprint(v...)))
+	t.output(fmt.Sprintf(`%s%s`, t.prefix("INFO "), fmt.Sprint(v...)))
 }
 
 // Infof output a [INFO ] string with format
@@ -209,7 +215,7 @@ func (t *Loggerx) infof(format string, v ...interface{}) {
 	if t.OutputLevel > OutputLevel_Info {
 		return
 	}
-	t.output(fmt.Sprintf(fmt.Sprintf(`[INFO ][%s]%s`, funcName(), format), v...))
+	t.output(fmt.Sprintf(fmt.Sprintf(`%s%s`, t.prefix("INFO "), format), v...))
 }
 
 // Warn output a [WARN ] string
@@ -221,7 +227,7 @@ func (t *Loggerx) warn(v ...interface{}) {
 	if t.OutputLevel > OutputLevel_Warn {
 		return
 	}
-	t.output(fmt.Sprintf(`[WARN ][%s]%s`, funcName(), fmt.Sprint(v...)))
+	t.output(fmt.Sprintf(`%s%s`, t.prefix("WARN "), fmt.Sprint(v...)))
 }
 
 // Warnf output a [WARN ] string with format
@@ -233,7 +239,7 @@ func (t *Loggerx) warnf(format string, v ...interface{}) {
 	if t.OutputLevel > OutputLevel_Warn {
 		return
 	}
-	t.output(fmt.Sprintf(fmt.Sprintf(`[WARN ][%s]%s`, funcName(), format), v...))
+	t.output(fmt.Sprintf(fmt.Sprintf(`%s%s`, t.prefix("WARN "), format), v...))
 }
 
 // Error output a [ERROR] string
@@ -245,7 +251,7 @@ func (t *Loggerx) error(v ...interface{}) {
 	if t.OutputLevel > OutputLevel_Error {
 		return
 	}
-	t.output(fmt.Sprintf(`[ERROR][%s]%s`, funcName(), fmt.Sprint(v...)))
+	t.output(fmt.Sprintf(`%s%s`, t.prefix("ERROR"), fmt.Sprint(v...)))
 }
 
 // Errorf output a [ERROR] string with format
@@ -257,7 +263,7 @@ func (t *Loggerx) errorf(format string, v ...interface{}) {
 	if t.OutputLevel > OutputLevel_Error {
 		return
 	}
-	t.output(fmt.Sprintf(fmt.Sprintf(`[ERROR][%s]%s`, funcName(), format), v...))
+	t.output(fmt.Sprintf(fmt.Sprintf(`%s%s`, t.prefix("ERROR"), format), v...))
 }
 
 func (t *Loggerx) getFileHandle() error {
@@ -414,11 +420,11 @@ func itoa(buf *[]byte, i int, wid int) {
 //   * file and line number (if corresponding flags are provided).
 func (t *Loggerx) formatHeader(buf *[]byte, tm time.Time, file string, line int) {
 	*buf = append(*buf, t.Prefix...)
-	if t.TimeFlag&(Ldate|Ltime|Lmicroseconds) != 0 {
-		if t.TimeFlag&LUTC != 0 {
+	if t.PrefixFlag&(Ldate|Ltime|Lmicroseconds) != 0 {
+		if t.PrefixFlag&LUTC != 0 {
 			tm = tm.UTC()
 		}
-		if t.TimeFlag&Ldate != 0 {
+		if t.PrefixFlag&Ldate != 0 {
 			year, month, day := tm.Date()
 			itoa(buf, year, 4)
 			*buf = append(*buf, '/')
@@ -427,22 +433,22 @@ func (t *Loggerx) formatHeader(buf *[]byte, tm time.Time, file string, line int)
 			itoa(buf, day, 2)
 			*buf = append(*buf, ' ')
 		}
-		if t.TimeFlag&(Ltime|Lmicroseconds) != 0 {
+		if t.PrefixFlag&(Ltime|Lmicroseconds) != 0 {
 			hour, min, sec := tm.Clock()
 			itoa(buf, hour, 2)
 			*buf = append(*buf, ':')
 			itoa(buf, min, 2)
 			*buf = append(*buf, ':')
 			itoa(buf, sec, 2)
-			if t.TimeFlag&Lmicroseconds != 0 {
+			if t.PrefixFlag&Lmicroseconds != 0 {
 				*buf = append(*buf, '.')
 				itoa(buf, tm.Nanosecond()/1e3, 6)
 			}
 			*buf = append(*buf, ' ')
 		}
 	}
-	if t.TimeFlag&(Lshortfile|Llongfile) != 0 {
-		if t.TimeFlag&Lshortfile != 0 {
+	if t.PrefixFlag&(Lshortfile|Llongfile) != 0 {
+		if t.PrefixFlag&Lshortfile != 0 {
 			short := file
 			for i := len(file) - 1; i > 0; i-- {
 				if file[i] == '/' {
@@ -463,7 +469,7 @@ func (t *Loggerx) makeStr(calldepth int, s string) []byte {
 	now := time.Now() // get this early.
 	var file string
 	var line int
-	if t.TimeFlag&(Lshortfile|Llongfile) != 0 {
+	if t.PrefixFlag&(Lshortfile|Llongfile) != 0 {
 		var ok bool
 		_, file, line, ok = runtime.Caller(calldepth)
 		if !ok {
