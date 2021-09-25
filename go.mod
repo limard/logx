@@ -1,3 +1,3 @@
-module bitbucket.org/Limard/logx
+module limard.com/limard/logx
 
 go 1.13
