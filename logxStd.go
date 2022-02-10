@@ -59,6 +59,14 @@ func Errorf(format string, v ...interface{}) {
 	logStd.Errorf(format, v...)
 }
 
+func Fatal(v ...interface{}) {
+	logStd.Fatal(v...)
+}
+
+func Fatalf(format string, v ...interface{}) {
+	logStd.Fatalf(format, v...)
+}
+
 // SetLogPath set path of output log
 func SetLogPath(s string) {
 	logStd.LogPath = s
@@ -78,7 +86,7 @@ func SetOutputFlag(flag int) {
 // OutputLevel_Info
 // OutputLevel_Warn
 // OutputLevel_Error
-// OutputLevel_Unexpected
+// OutputLevel_Fatal
 func SetOutputLevel(level int) {
 	logStd.OutputLevel = level
 }
@@ -91,4 +99,8 @@ func SetPrefixFlag(flag int) {
 // SetConsoleOut set a writer instead of console
 func SetConsoleOut(out io.Writer) {
 	logStd.ConsoleOutWriter = out
+}
+
+func DefaultLog() *Logger {
+	return logStd
 }

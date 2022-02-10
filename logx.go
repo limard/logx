@@ -17,7 +17,7 @@ import (
 	"time"
 )
 
-var logLevelStr = []string{"DEBUG", "INFO ", "WARN ", "ERROR", "UNEXP"}
+var logLevelStr = []string{"DEBUG", "INFO ", "WARN ", "ERROR", "FATAL"}
 
 // const value
 const (
@@ -30,7 +30,7 @@ const (
 	OutputLevel_Info
 	OutputLevel_Warn
 	OutputLevel_Error
-	OutputLevel_Unexpected
+	OutputLevel_Fatal
 )
 
 const (
@@ -129,8 +129,8 @@ func New(path, name string) *Logger {
 				l.OutputLevel = OutputLevel_Warn
 			case "error", "err":
 				l.OutputLevel = OutputLevel_Error
-			case "unexpected":
-				l.OutputLevel = OutputLevel_Unexpected
+			case "fatal":
+				l.OutputLevel = OutputLevel_Fatal
 			}
 		}
 	}
@@ -179,15 +179,24 @@ func (t *Logger) DebugToJson(v ...interface{}) {
 }
 
 func (t *Logger) Print(v ...interface{}) {
-	t.Debug(v...)
+	if t.OutputLevel > OutputLevel_Debug {
+		return
+	}
+	t.output(OutputLevel_Debug, "", v...)
 }
 
 func (t *Logger) Println(v ...interface{}) {
-	t.Debug(v...)
+	if t.OutputLevel > OutputLevel_Debug {
+		return
+	}
+	t.output(OutputLevel_Debug, "", v...)
 }
 
 func (t *Logger) Printf(format string, v ...interface{}) {
-	t.Debugf(format, v...)
+	if t.OutputLevel > OutputLevel_Debug {
+		return
+	}
+	t.output(OutputLevel_Debug, format, v...)
 }
 
 // Info output a [INFO ] string
@@ -239,8 +248,16 @@ func (t *Logger) Errorf(format string, v ...interface{}) {
 }
 
 func (t *Logger) Fatal(v ...interface{}) {
-	t.Error(v...)
+	t.output(OutputLevel_Fatal, "", v...)
+	os.Exit(1)
 }
+
+func (t *Logger) Fatalf(format string, v ...interface{}) {
+	t.output(OutputLevel_Fatal, format, v...)
+	os.Exit(1)
+}
+
+///////////
 
 func (t *Logger) getFileHandle() error {
 	e := os.MkdirAll(t.LogPath, 0777)
@@ -420,7 +437,7 @@ func (t *Logger) makeStr(level int, format string, v ...interface{}) (buf []byte
 		}
 		if t.PrefixFlag&PrefixFlag_Date != 0 {
 			year, month, day := tm.Date()
-			t.itoa(&buf, year, 4)
+			t.itoa(&buf, year%100, 2)
 			buf = append(buf, '/')
 			t.itoa(&buf, int(month), 2)
 			buf = append(buf, '/')
