@@ -12,8 +12,10 @@ func TestTrace(t *testing.T) {
 	Errorf("%d", 2355)
 
 	l := New("", "")
+	l.PrefixFlag = PrefixFlag_level | PrefixFlag_Time
 	l.Trace()
 	l.Debugf("Debug %v %v", "123", "456")
+	l.Error("ERROROOOOO")
 }
 
 func TestSort(t *testing.T) {

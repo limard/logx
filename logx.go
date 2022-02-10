@@ -17,26 +17,31 @@ import (
 	"time"
 )
 
+var logLevelStr = []string{"DEBUG", "INFO ", "WARN ", "ERROR", "UNEXP"}
+
 // const value
 const (
 	OutputFlag_File = 1 << iota
 	OutputFlag_Console
+)
 
-	OutputLevel_Debug      = 100
-	OutputLevel_Info       = 200
-	OutputLevel_Warn       = 300
-	OutputLevel_Error      = 400
-	OutputLevel_Unexpected = 500
+const (
+	OutputLevel_Debug = iota
+	OutputLevel_Info
+	OutputLevel_Warn
+	OutputLevel_Error
+	OutputLevel_Unexpected
+)
 
-	Ldate         = 1 << iota     // the date in the local time zone: 2009/01/23
-	Ltime                         // the time in the local time zone: 01:23:23
-	Lmicroseconds                 // microsecond resolution: 01:23:23.123123.  assumes Ltime.
-	Llongfile                     // full file name and line number: /a/b/c/d.go:23
-	Lshortfile                    // final file name element and line number: d.go:23. overrides Llongfile
-	LUTC                          // if Ldate or Ltime is set, use UTC rather than the local time zone
-	LstdFlags     = Ldate | Ltime // initial values for the standard logger
-	LfuncName
-	Llevel
+const (
+	PrefixFlag_Date         = 1 << iota // the date in the local time zone: 2009/01/23
+	PrefixFlag_Time                     // the time in the local time zone: 01:23:23
+	PrefixFlag_Microseconds             // microsecond resolution: 01:23:23.123123.  assumes PrefixFlag_Time.
+	PrefixFlag_Longfile                 // full file name and line number: /a/b/c/d.go:23
+	PrefixFlag_Shortfile                // final file name element and line number: d.go:23. overrides PrefixFlag_Longfile
+	PrefixFlag_UTC                      // if PrefixFlag_Date or PrefixFlag_Time is set, use UTC rather than the local time zone
+	PrefixFlag_FuncName
+	PrefixFlag_level
 )
 
 //Logger struct
@@ -54,6 +59,7 @@ type Logger struct {
 	ContinuousLog    bool   // 连续在上一个文件中输出，适用于经常被调用启动的程序日志
 	LogSaveTime      time.Duration
 	ConsoleOutWriter io.Writer // 可重定向到父进程中
+	ConsoleColor     bool
 
 	writeCnt int    // 记录写入次数
 	Prefix   []byte // Prefix to write at beginning of each line
@@ -69,11 +75,12 @@ func New(path, name string) *Logger {
 		LogName:          name,
 		OutputFlag:       OutputFlag_File | OutputFlag_Console,
 		OutputLevel:      OutputLevel_Debug,
-		PrefixFlag:       Lshortfile | LstdFlags | LfuncName | Llevel,
+		PrefixFlag:       PrefixFlag_Shortfile | PrefixFlag_Date | PrefixFlag_Time | PrefixFlag_FuncName | PrefixFlag_level,
 		MaxLogNumber:     3,
 		ContinuousLog:    true,
 		LogSaveTime:      6 * 24 * time.Hour,
 		ConsoleOutWriter: os.Stdout,
+		ConsoleColor:     true,
 		writeCnt:         0,
 		callSkip:         3,
 	}
@@ -131,26 +138,11 @@ func New(path, name string) *Logger {
 	return l
 }
 
-func (t *Logger) prefix(level string) (prefix string) {
-	if t.PrefixFlag&Llevel != 0 {
-		prefix = "[" + level + "]"
-	}
-	if t.PrefixFlag&LfuncName != 0 {
-		pc, _, _, ok := runtime.Caller(2)
-		if ok {
-			funcName := runtime.FuncForPC(pc).Name()
-			s := strings.Split(funcName, ".")
-			prefix += "[" + s[len(s)-1] + "]"
-		}
-	}
-	return
-}
-
 func (t *Logger) Trace() {
 	if t.OutputLevel > OutputLevel_Debug {
 		return
 	}
-	t.output("TRACE", "")
+	t.output(OutputLevel_Debug, "TRACE")
 }
 
 // Debug output a [DEBUG] string
@@ -158,7 +150,7 @@ func (t *Logger) Debug(v ...interface{}) {
 	if t.OutputLevel > OutputLevel_Debug {
 		return
 	}
-	t.output("DEBUG", "", v...)
+	t.output(OutputLevel_Debug, "", v...)
 }
 
 // Debugf output a [DEBUG] string with format
@@ -166,14 +158,14 @@ func (t *Logger) Debugf(format string, v ...interface{}) {
 	if t.OutputLevel > OutputLevel_Debug {
 		return
 	}
-	t.output("DEBUG", format, v...)
+	t.output(OutputLevel_Debug, format, v...)
 }
 
 func (t *Logger) DebugToJson(v ...interface{}) {
 	if t.OutputLevel > OutputLevel_Debug {
 		return
 	}
-	ss := []string{t.prefix("DEBUG")}
+	var ss []string
 	for _, sub := range v {
 		switch sub.(type) {
 		case string:
@@ -183,7 +175,19 @@ func (t *Logger) DebugToJson(v ...interface{}) {
 			ss = append(ss, string(buf))
 		}
 	}
-	t.output("DEBUG", strings.Join(ss, ""))
+	t.output(OutputLevel_Debug, strings.Join(ss, ""))
+}
+
+func (t *Logger) Print(v ...interface{}) {
+	t.Debug(v...)
+}
+
+func (t *Logger) Println(v ...interface{}) {
+	t.Debug(v...)
+}
+
+func (t *Logger) Printf(format string, v ...interface{}) {
+	t.Debugf(format, v...)
 }
 
 // Info output a [INFO ] string
@@ -191,7 +195,7 @@ func (t *Logger) Info(v ...interface{}) {
 	if t.OutputLevel > OutputLevel_Info {
 		return
 	}
-	t.output("INFO ", "", v...)
+	t.output(OutputLevel_Info, "", v...)
 }
 
 // Infof output a [INFO ] string with format
@@ -199,7 +203,7 @@ func (t *Logger) Infof(format string, v ...interface{}) {
 	if t.OutputLevel > OutputLevel_Info {
 		return
 	}
-	t.output("INFO ", format, v...)
+	t.output(OutputLevel_Info, format, v...)
 }
 
 // Warn output a [WARN ] string
@@ -207,7 +211,7 @@ func (t *Logger) Warn(v ...interface{}) {
 	if t.OutputLevel > OutputLevel_Warn {
 		return
 	}
-	t.output("WARN ", "", v...)
+	t.output(OutputLevel_Warn, "", v...)
 }
 
 // Warnf output a [WARN ] string with format
@@ -215,7 +219,7 @@ func (t *Logger) Warnf(format string, v ...interface{}) {
 	if t.OutputLevel > OutputLevel_Warn {
 		return
 	}
-	t.output("WARN ", format, v...)
+	t.output(OutputLevel_Warn, format, v...)
 }
 
 // Error output a [ERROR] string
@@ -223,7 +227,7 @@ func (t *Logger) Error(v ...interface{}) {
 	if t.OutputLevel > OutputLevel_Error {
 		return
 	}
-	t.output("ERROR", "", v...)
+	t.output(OutputLevel_Error, "", v...)
 }
 
 // Errorf output a [ERROR] string with format
@@ -231,7 +235,11 @@ func (t *Logger) Errorf(format string, v ...interface{}) {
 	if t.OutputLevel > OutputLevel_Error {
 		return
 	}
-	t.output("ERROR", format, v...)
+	t.output(OutputLevel_Error, format, v...)
+}
+
+func (t *Logger) Fatal(v ...interface{}) {
+	t.Error(v...)
 }
 
 func (t *Logger) getFileHandle() error {
@@ -340,16 +348,15 @@ func (t *Logger) renewLogFile() (e error) {
 	return nil
 }
 
-func (t *Logger) output(level, format string, v ...interface{}) {
+func (t *Logger) output(level int, format string, v ...interface{}) {
 	buf := t.makeStr(level, format, v...)
 
 	if t.OutputFlag&OutputFlag_File != 0 {
 		e := t.renewLogFile()
 		if e != nil {
-			if t.ConsoleOutWriter != nil {
-				t.ConsoleOutWriter.Write([]byte(e.Error()))
-				t.ConsoleOutWriter.Write([]byte("\n"))
-			}
+			t.ConsoleOutWriter.Write([]byte(e.Error()))
+			t.ConsoleOutWriter.Write([]byte("\n"))
+
 			if strings.Contains(e.Error(), "permission denied") {
 				t.OutputFlag &= ^OutputFlag_File
 			}
@@ -360,8 +367,23 @@ func (t *Logger) output(level, format string, v ...interface{}) {
 		}
 	}
 
-	if t.OutputFlag&OutputFlag_Console != 0 && t.ConsoleOutWriter != nil {
-		t.ConsoleOutWriter.Write(buf)
+	if t.OutputFlag&OutputFlag_Console != 0 {
+		if t.ConsoleColor {
+			switch level {
+			case OutputLevel_Debug:
+				t.ConsoleOutWriter.Write([]byte("\033[0;39;49m"))
+			case OutputLevel_Info:
+				t.ConsoleOutWriter.Write([]byte("\033[0;34;49m"))
+			case OutputLevel_Warn:
+				t.ConsoleOutWriter.Write([]byte("\033[1;33;49m"))
+			case OutputLevel_Error:
+				t.ConsoleOutWriter.Write([]byte("\033[1;31;49m"))
+			}
+			t.ConsoleOutWriter.Write(buf)
+			t.ConsoleOutWriter.Write([]byte("\u001B[0m"))
+		} else {
+			t.ConsoleOutWriter.Write(buf)
+		}
 	}
 }
 
@@ -382,14 +404,21 @@ func (t *Logger) itoa(buf *[]byte, i int, wid int) {
 	*buf = append(*buf, b[bp:]...)
 }
 
-func (t *Logger) makeStr(level, format string, v ...interface{}) (buf []byte) {
+func (t *Logger) makeStr(level int, format string, v ...interface{}) (buf []byte) {
+	// level.. [DEBUG]
+	if t.PrefixFlag&PrefixFlag_level != 0 {
+		buf = append(buf, '[')
+		buf = append(buf, logLevelStr[level]...)
+		buf = append(buf, ']', ' ')
+	}
+
 	// time.. 2022/02/10 15:00:22
-	if t.PrefixFlag&(Ldate|Ltime|Lmicroseconds) != 0 {
+	if t.PrefixFlag&(PrefixFlag_Date|PrefixFlag_Time|PrefixFlag_Microseconds) != 0 {
 		tm := time.Now()
-		if t.PrefixFlag&LUTC != 0 {
+		if t.PrefixFlag&PrefixFlag_UTC != 0 {
 			tm = tm.UTC()
 		}
-		if t.PrefixFlag&Ldate != 0 {
+		if t.PrefixFlag&PrefixFlag_Date != 0 {
 			year, month, day := tm.Date()
 			t.itoa(&buf, year, 4)
 			buf = append(buf, '/')
@@ -398,14 +427,14 @@ func (t *Logger) makeStr(level, format string, v ...interface{}) (buf []byte) {
 			t.itoa(&buf, day, 2)
 			buf = append(buf, ' ')
 		}
-		if t.PrefixFlag&(Ltime|Lmicroseconds) != 0 {
+		if t.PrefixFlag&(PrefixFlag_Time|PrefixFlag_Microseconds) != 0 {
 			hour, min, sec := tm.Clock()
 			t.itoa(&buf, hour, 2)
 			buf = append(buf, ':')
 			t.itoa(&buf, min, 2)
 			buf = append(buf, ':')
 			t.itoa(&buf, sec, 2)
-			if t.PrefixFlag&Lmicroseconds != 0 {
+			if t.PrefixFlag&PrefixFlag_Microseconds != 0 {
 				buf = append(buf, '.')
 				t.itoa(&buf, tm.Nanosecond()/1e3, 6)
 			}
@@ -413,19 +442,12 @@ func (t *Logger) makeStr(level, format string, v ...interface{}) (buf []byte) {
 		}
 	}
 
-	// level.. [DEBUG]
-	if t.PrefixFlag&Llevel != 0 {
-		buf = append(buf, '[')
-		buf = append(buf, level...)
-		buf = append(buf, ']', ' ')
-	}
-
 	// logx_test.go:9 (funcName):
-	if t.PrefixFlag&(Lshortfile|Llongfile|LfuncName) != 0 {
+	if t.PrefixFlag&(PrefixFlag_Shortfile|PrefixFlag_Longfile|PrefixFlag_FuncName) != 0 {
 		pc, file, line, ok := runtime.Caller(t.callSkip)
 		if ok {
-			if t.PrefixFlag&(Lshortfile|Llongfile) != 0 {
-				if t.PrefixFlag&Lshortfile != 0 {
+			if t.PrefixFlag&(PrefixFlag_Shortfile|PrefixFlag_Longfile) != 0 {
+				if t.PrefixFlag&PrefixFlag_Shortfile != 0 {
 					short := file
 					for i := len(file) - 1; i > 0; i-- {
 						if file[i] == '/' {
@@ -440,7 +462,7 @@ func (t *Logger) makeStr(level, format string, v ...interface{}) (buf []byte) {
 				t.itoa(&buf, line, -1)
 			}
 
-			if t.PrefixFlag&LfuncName != 0 {
+			if t.PrefixFlag&PrefixFlag_FuncName != 0 {
 				funcName := runtime.FuncForPC(pc).Name()
 				s := strings.Split(funcName, ".")
 				funcName = s[len(s)-1]
@@ -469,18 +491,4 @@ func (t *Logger) makeStr(level, format string, v ...interface{}) (buf []byte) {
 		buf = append(buf, '\r', '\n')
 	}
 	return buf
-}
-
-// For log
-func (t *Logger) Print(v ...interface{}) {
-	t.Debug(v...)
-}
-func (t *Logger) Println(v ...interface{}) {
-	t.Debug(v...)
-}
-func (t *Logger) Printf(format string, v ...interface{}) {
-	t.Debugf(format, v...)
-}
-func (t *Logger) Fatal(v ...interface{}) {
-	t.Error(v...)
 }

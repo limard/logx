@@ -83,8 +83,8 @@ func SetOutputLevel(level int) {
 	logStd.OutputLevel = level
 }
 
-// SetTimeFlag set time format(Lshortfile | Ldate | Ltime)
-func SetTimeFlag(flag int) {
+// SetPrefixFlag set time format(PrefixFlag_Shortfile | PrefixFlag_Date | PrefixFlag_Time)
+func SetPrefixFlag(flag int) {
 	logStd.PrefixFlag = flag
 }
 
