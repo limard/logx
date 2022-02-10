@@ -1,39 +1,26 @@
 package logx
 
 import (
-	"fmt"
-	"path/filepath"
 	"testing"
 )
 
 func TestTrace(t *testing.T) {
 	Trace()
 	Debugf("Debug %v %v", "123", "456")
+	Info("6789")
+	Warn("5tyui")
+	Errorf("%d", 2355)
 
-	l := New("", "Logx.Obj")
-	l.PrefixFlag = 0
+	l := New("", "")
 	l.Trace()
 	l.Debugf("Debug %v %v", "123", "456")
-}
-
-func Test111(t *testing.T) {
-	t.Log(d("Debug %v %v", "123", "456"))
-	t.Log(d2("Debug %v %v", "123", "456"))
-}
-
-func d2(f string, v ...interface{}) string {
-	return d(f, v...)
-}
-
-func d(f string, v ...interface{}) string {
-	return fmt.Sprintf(f, v...)
 }
 
 func TestSort(t *testing.T) {
 	files := []string{"bipkg.exe.181015_111646.log", "bipkg.exe.181015_111600.log", "bipkg.exe.181015_111518.log",
 		"bipkg.exe.181015_111510.log", "bipkg.exe.181015_111349.log",
 		"bipkg.exe.181015_111504.log", "bipkg.exe.181015_111438.log"}
-	files = logxSTD.getNeedDeleteLogfile(files)
+	files = logStd.getNeedDeleteLogfile(files)
 	t.Log(files)
 }
 
@@ -59,7 +46,10 @@ func TestCleanFile(t *testing.T) {
 	}
 }
 
-func TestFilePathJoin(t *testing.T) {
-	t.Log(filepath.Join(`/var/log/bis`, `BIS`))
-	t.Log(filepath.Join(`/var/log/bis/`, `BIS`))
+//BenchmarkName-8   	  730000	      1554 ns/op
+func BenchmarkSpeed(b *testing.B) {
+	SetOutputFlag(0)
+	for i := 0; i < b.N; i++ {
+		Debug("123")
+	}
 }
