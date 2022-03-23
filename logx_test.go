@@ -11,8 +11,8 @@ func TestTrace(t *testing.T) {
 	Warn("5tyui")
 	Errorf("%d", 2355)
 
-	l := New("", "")
-	l.PrefixFlag = PrefixFlag_level | PrefixFlag_Time
+	l := NewLogger("", "")
+	l.PrefixFlag = Llevel | Ltime
 	l.Trace()
 	l.Debugf("Debug %v %v", "123", "456")
 	l.Error("ERROROOOOO")
@@ -40,7 +40,7 @@ func TestLogx(t *testing.T) {
 }
 
 func TestCleanFile(t *testing.T) {
-	l := New("", "testCleanFile")
+	l := NewLogger("", "testCleanFile")
 	l.OutputFlag = OutputFlag_File
 	l.LineMaxLength = 1024
 	for i := 0; i < 100000; i++ {

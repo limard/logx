@@ -1,6 +1,6 @@
 package logx
 
-// version: 2022/2/10
+// version: 2022/3/23
 
 import (
 	"encoding/json"
@@ -18,6 +18,7 @@ import (
 )
 
 var logLevelStr = []string{"DEBUG", "INFO ", "WARN ", "ERROR", "FATAL"}
+var log = NewLogger("", "")
 
 // const value
 const (
@@ -34,14 +35,16 @@ const (
 )
 
 const (
-	PrefixFlag_Date         = 1 << iota // the date in the local time zone: 2009/01/23
-	PrefixFlag_Time                     // the time in the local time zone: 01:23:23
-	PrefixFlag_Microseconds             // microsecond resolution: 01:23:23.123123.  assumes PrefixFlag_Time.
-	PrefixFlag_Longfile                 // full file name and line number: /a/b/c/d.go:23
-	PrefixFlag_Shortfile                // final file name element and line number: d.go:23. overrides PrefixFlag_Longfile
-	PrefixFlag_UTC                      // if PrefixFlag_Date or PrefixFlag_Time is set, use UTC rather than the local time zone
-	PrefixFlag_FuncName
-	PrefixFlag_level
+	Ldate         = 1 << iota // the date in the local time zone: 2009/01/23
+	Ltime                     // the time in the local time zone: 01:23:23
+	Lmicroseconds             // microsecond resolution: 01:23:23.123123.  assumes PrefixFlag_Time.
+	Llongfile                 // full file name and line number: /a/b/c/d.go:23
+	Lshortfile                // final file name element and line number: d.go:23. overrides PrefixFlag_Longfile
+	LUTC                      // if PrefixFlag_Date or PrefixFlag_Time is set, use UTC rather than the local time zone
+	Lmsgprefix
+	LfuncName
+	Llevel
+	LstdFlags = Lshortfile | Ldate | Ltime | LfuncName | Llevel
 )
 
 //Logger struct
@@ -61,13 +64,14 @@ type Logger struct {
 	ConsoleOutWriter io.Writer // 可重定向到父进程中
 	ConsoleColor     bool
 
-	writeCnt int    // 记录写入次数
-	Prefix   []byte // Prefix to write at beginning of each line
+	mu       sync.Mutex //log mutex
+	writeCnt int        // 记录写入次数
+	Prefix   []byte     // Prefix to write at beginning of each line
 	muFile   sync.Mutex
 	callSkip int
 }
 
-func New(path, name string) *Logger {
+func NewLogger(path, name string) *Logger {
 	l := &Logger{
 		FilePerm:         os.FileMode(0666),
 		LineMaxLength:    1024,
@@ -75,7 +79,7 @@ func New(path, name string) *Logger {
 		LogName:          name,
 		OutputFlag:       OutputFlag_File | OutputFlag_Console,
 		OutputLevel:      OutputLevel_Debug,
-		PrefixFlag:       PrefixFlag_Shortfile | PrefixFlag_Date | PrefixFlag_Time | PrefixFlag_FuncName | PrefixFlag_level,
+		PrefixFlag:       LstdFlags,
 		MaxLogNumber:     3,
 		ContinuousLog:    true,
 		LogSaveTime:      6 * 24 * time.Hour,
@@ -257,6 +261,10 @@ func (t *Logger) Fatalf(format string, v ...interface{}) {
 	os.Exit(1)
 }
 
+func (t *Logger) SetFlags(flag int) {
+	t.OutputFlag = flag
+}
+
 ///////////
 
 func (t *Logger) getFileHandle() error {
@@ -385,6 +393,7 @@ func (t *Logger) output(level int, format string, v ...interface{}) {
 	}
 
 	if t.OutputFlag&OutputFlag_Console != 0 {
+		t.mu.Lock()
 		if t.ConsoleColor {
 			switch level {
 			case OutputLevel_Debug:
@@ -401,6 +410,7 @@ func (t *Logger) output(level int, format string, v ...interface{}) {
 		} else {
 			t.ConsoleOutWriter.Write(buf)
 		}
+		t.mu.Unlock()
 	}
 }
 
@@ -423,19 +433,19 @@ func (t *Logger) itoa(buf *[]byte, i int, wid int) {
 
 func (t *Logger) makeStr(level int, format string, v ...interface{}) (buf []byte) {
 	// level.. [DEBUG]
-	if t.PrefixFlag&PrefixFlag_level != 0 {
+	if t.PrefixFlag&Llevel != 0 {
 		buf = append(buf, '[')
 		buf = append(buf, logLevelStr[level]...)
 		buf = append(buf, ']', ' ')
 	}
 
 	// time.. 2022/02/10 15:00:22
-	if t.PrefixFlag&(PrefixFlag_Date|PrefixFlag_Time|PrefixFlag_Microseconds) != 0 {
+	if t.PrefixFlag&(Ldate|Ltime|Lmicroseconds) != 0 {
 		tm := time.Now()
-		if t.PrefixFlag&PrefixFlag_UTC != 0 {
+		if t.PrefixFlag&LUTC != 0 {
 			tm = tm.UTC()
 		}
-		if t.PrefixFlag&PrefixFlag_Date != 0 {
+		if t.PrefixFlag&Ldate != 0 {
 			year, month, day := tm.Date()
 			t.itoa(&buf, year%100, 2)
 			buf = append(buf, '/')
@@ -444,14 +454,14 @@ func (t *Logger) makeStr(level int, format string, v ...interface{}) (buf []byte
 			t.itoa(&buf, day, 2)
 			buf = append(buf, ' ')
 		}
-		if t.PrefixFlag&(PrefixFlag_Time|PrefixFlag_Microseconds) != 0 {
+		if t.PrefixFlag&(Ltime|Lmicroseconds) != 0 {
 			hour, min, sec := tm.Clock()
 			t.itoa(&buf, hour, 2)
 			buf = append(buf, ':')
 			t.itoa(&buf, min, 2)
 			buf = append(buf, ':')
 			t.itoa(&buf, sec, 2)
-			if t.PrefixFlag&PrefixFlag_Microseconds != 0 {
+			if t.PrefixFlag&Lmicroseconds != 0 {
 				buf = append(buf, '.')
 				t.itoa(&buf, tm.Nanosecond()/1e3, 6)
 			}
@@ -460,11 +470,11 @@ func (t *Logger) makeStr(level int, format string, v ...interface{}) (buf []byte
 	}
 
 	// logx_test.go:9 (funcName):
-	if t.PrefixFlag&(PrefixFlag_Shortfile|PrefixFlag_Longfile|PrefixFlag_FuncName) != 0 {
+	if t.PrefixFlag&(Lshortfile|Llongfile|LfuncName) != 0 {
 		pc, file, line, ok := runtime.Caller(t.callSkip)
 		if ok {
-			if t.PrefixFlag&(PrefixFlag_Shortfile|PrefixFlag_Longfile) != 0 {
-				if t.PrefixFlag&PrefixFlag_Shortfile != 0 {
+			if t.PrefixFlag&(Lshortfile|Llongfile) != 0 {
+				if t.PrefixFlag&Lshortfile != 0 {
 					short := file
 					for i := len(file) - 1; i > 0; i-- {
 						if file[i] == '/' {
@@ -479,7 +489,7 @@ func (t *Logger) makeStr(level int, format string, v ...interface{}) (buf []byte
 				t.itoa(&buf, line, -1)
 			}
 
-			if t.PrefixFlag&PrefixFlag_FuncName != 0 {
+			if t.PrefixFlag&LfuncName != 0 {
 				funcName := runtime.FuncForPC(pc).Name()
 				s := strings.Split(funcName, ".")
 				funcName = s[len(s)-1]

@@ -4,7 +4,7 @@ import (
 	"io"
 )
 
-var logStd = New("", "")
+var logStd = NewLogger("", "")
 
 func init() {
 	logStd.callSkip = 4
