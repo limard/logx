@@ -397,16 +397,22 @@ func (t *Logger) output(level int, format string, v ...interface{}) {
 		if t.ConsoleColor {
 			switch level {
 			case OutputLevel_Debug:
-				t.ConsoleOutWriter.Write([]byte("\033[0;39;49m"))
+				// t.ConsoleOutWriter.Write([]byte("\033[0;39;49m"))
+				t.ConsoleOutWriter.Write(buf)
+				// t.ConsoleOutWriter.Write([]byte("\u001B[0m"))
 			case OutputLevel_Info:
-				t.ConsoleOutWriter.Write([]byte("\033[0;34;49m"))
+				// t.ConsoleOutWriter.Write([]byte("\033[0;34;49m"))
+				t.ConsoleOutWriter.Write(buf)
+				// t.ConsoleOutWriter.Write([]byte("\u001B[0m"))
 			case OutputLevel_Warn:
 				t.ConsoleOutWriter.Write([]byte("\033[1;33;49m"))
+				t.ConsoleOutWriter.Write(buf)
+				t.ConsoleOutWriter.Write([]byte("\u001B[0m"))
 			case OutputLevel_Error:
 				t.ConsoleOutWriter.Write([]byte("\033[1;31;49m"))
+				t.ConsoleOutWriter.Write(buf)
+				t.ConsoleOutWriter.Write([]byte("\u001B[0m"))
 			}
-			t.ConsoleOutWriter.Write(buf)
-			t.ConsoleOutWriter.Write([]byte("\u001B[0m"))
 		} else {
 			t.ConsoleOutWriter.Write(buf)
 		}
