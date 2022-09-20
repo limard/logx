@@ -1,8 +1,9 @@
 package logx
 
-// version: 2022/3/23
+// version: 2022/9/20
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -57,7 +58,8 @@ type Logger struct {
 	LogName          string // log的文件名，默认为程序名
 	OutputFlag       int    // 输出Flag
 	OutputLevel      int    // 输出级别
-	PrefixFlag       int    // properties
+	PrefixFlag       int    // properties L...
+	PrefixLevel      int    // 输出级别，用于debug等，在较为常见的级别上，不输出prefix
 	MaxLogNumber     int    // 最多log文件个数
 	ContinuousLog    bool   // 连续在上一个文件中输出，适用于经常被调用启动的程序日志
 	LogSaveTime      time.Duration
@@ -175,8 +177,11 @@ func (t *Logger) DebugToJson(v ...interface{}) {
 		case string:
 			ss = append(ss, sub.(string))
 		default:
-			buf, _ := json.Marshal(sub)
-			ss = append(ss, string(buf))
+			b := &bytes.Buffer{}
+			en := json.NewEncoder(b)
+			en.SetEscapeHTML(false)
+			en.Encode(sub)
+			ss = append(ss, b.String())
 		}
 	}
 	t.output(OutputLevel_Debug, strings.Join(ss, ""))
@@ -438,72 +443,74 @@ func (t *Logger) itoa(buf *[]byte, i int, wid int) {
 }
 
 func (t *Logger) makeStr(level int, format string, v ...interface{}) (buf []byte) {
-	// level.. [DEBUG]
-	if t.PrefixFlag&Llevel != 0 {
-		buf = append(buf, '[')
-		buf = append(buf, logLevelStr[level]...)
-		buf = append(buf, ']', ' ')
-	}
+	if level >= t.PrefixLevel {
+		// level.. [DEBUG]
+		if t.PrefixFlag&Llevel != 0 {
+			buf = append(buf, '[')
+			buf = append(buf, logLevelStr[level]...)
+			buf = append(buf, ']', ' ')
+		}
 
-	// time.. 2022/02/10 15:00:22
-	if t.PrefixFlag&(Ldate|Ltime|Lmicroseconds) != 0 {
-		tm := time.Now()
-		if t.PrefixFlag&LUTC != 0 {
-			tm = tm.UTC()
-		}
-		if t.PrefixFlag&Ldate != 0 {
-			year, month, day := tm.Date()
-			t.itoa(&buf, year%100, 2)
-			buf = append(buf, '/')
-			t.itoa(&buf, int(month), 2)
-			buf = append(buf, '/')
-			t.itoa(&buf, day, 2)
-			buf = append(buf, ' ')
-		}
-		if t.PrefixFlag&(Ltime|Lmicroseconds) != 0 {
-			hour, min, sec := tm.Clock()
-			t.itoa(&buf, hour, 2)
-			buf = append(buf, ':')
-			t.itoa(&buf, min, 2)
-			buf = append(buf, ':')
-			t.itoa(&buf, sec, 2)
-			if t.PrefixFlag&Lmicroseconds != 0 {
-				buf = append(buf, '.')
-				t.itoa(&buf, tm.Nanosecond()/1e3, 6)
+		// time.. 2022/02/10 15:00:22
+		if t.PrefixFlag&(Ldate|Ltime|Lmicroseconds) != 0 {
+			tm := time.Now()
+			if t.PrefixFlag&LUTC != 0 {
+				tm = tm.UTC()
 			}
-			buf = append(buf, ' ')
-		}
-	}
-
-	// logx_test.go:9 (funcName):
-	if t.PrefixFlag&(Lshortfile|Llongfile|LfuncName) != 0 {
-		pc, file, line, ok := runtime.Caller(t.callSkip)
-		if ok {
-			if t.PrefixFlag&(Lshortfile|Llongfile) != 0 {
-				if t.PrefixFlag&Lshortfile != 0 {
-					short := file
-					for i := len(file) - 1; i > 0; i-- {
-						if file[i] == '/' {
-							short = file[i+1:]
-							break
-						}
-					}
-					file = short
-				}
-				buf = append(buf, file...)
-				buf = append(buf, ':')
-				t.itoa(&buf, line, -1)
-			}
-
-			if t.PrefixFlag&LfuncName != 0 {
-				funcName := runtime.FuncForPC(pc).Name()
-				s := strings.Split(funcName, ".")
-				funcName = s[len(s)-1]
+			if t.PrefixFlag&Ldate != 0 {
+				year, month, day := tm.Date()
+				t.itoa(&buf, year%100, 2)
+				buf = append(buf, '/')
+				t.itoa(&buf, int(month), 2)
+				buf = append(buf, '/')
+				t.itoa(&buf, day, 2)
 				buf = append(buf, ' ')
-				buf = append(buf, funcName...)
-				//buf = append(buf, ')')
 			}
-			buf = append(buf, ':', ' ')
+			if t.PrefixFlag&(Ltime|Lmicroseconds) != 0 {
+				hour, min, sec := tm.Clock()
+				t.itoa(&buf, hour, 2)
+				buf = append(buf, ':')
+				t.itoa(&buf, min, 2)
+				buf = append(buf, ':')
+				t.itoa(&buf, sec, 2)
+				if t.PrefixFlag&Lmicroseconds != 0 {
+					buf = append(buf, '.')
+					t.itoa(&buf, tm.Nanosecond()/1e3, 6)
+				}
+				buf = append(buf, ' ')
+			}
+		}
+
+		// logx_test.go:9 (funcName):
+		if t.PrefixFlag&(Lshortfile|Llongfile|LfuncName) != 0 {
+			pc, file, line, ok := runtime.Caller(t.callSkip)
+			if ok {
+				if t.PrefixFlag&(Lshortfile|Llongfile) != 0 {
+					if t.PrefixFlag&Lshortfile != 0 {
+						short := file
+						for i := len(file) - 1; i > 0; i-- {
+							if file[i] == '/' {
+								short = file[i+1:]
+								break
+							}
+						}
+						file = short
+					}
+					buf = append(buf, file...)
+					buf = append(buf, ':')
+					t.itoa(&buf, line, -1)
+				}
+
+				if t.PrefixFlag&LfuncName != 0 {
+					funcName := runtime.FuncForPC(pc).Name()
+					s := strings.Split(funcName, ".")
+					funcName = s[len(s)-1]
+					buf = append(buf, ' ')
+					buf = append(buf, funcName...)
+					//buf = append(buf, ')')
+				}
+				buf = append(buf, ':', ' ')
+			}
 		}
 	}
 
