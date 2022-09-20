@@ -1,8 +1,9 @@
 package logx
 
-// version: 2022/3/23
+// version: 2022/9/20
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -17,7 +18,7 @@ import (
 	"time"
 )
 
-var logLevelStr = []string{"DEBUG", "INFO ", "WARN ", "ERROR", "FATAL"}
+var logLevelStr = []string{"[DBG]", "[INF]", "[WAR]", "[ERR]", "[FAT]"}
 var log = NewLogger("", "")
 
 // const value
@@ -57,7 +58,8 @@ type Logger struct {
 	LogName          string // log的文件名，默认为程序名
 	OutputFlag       int    // 输出Flag
 	OutputLevel      int    // 输出级别
-	PrefixFlag       int    // properties
+	PrefixFlag       int    // properties L...
+	FileInfoLevel    int    // 输出级别，用于在debug等常见的级别上，不输出文件、函数信息
 	MaxLogNumber     int    // 最多log文件个数
 	ContinuousLog    bool   // 连续在上一个文件中输出，适用于经常被调用启动的程序日志
 	LogSaveTime      time.Duration
@@ -175,8 +177,11 @@ func (t *Logger) DebugToJson(v ...interface{}) {
 		case string:
 			ss = append(ss, sub.(string))
 		default:
-			buf, _ := json.Marshal(sub)
-			ss = append(ss, string(buf))
+			b := &bytes.Buffer{}
+			en := json.NewEncoder(b)
+			en.SetEscapeHTML(false)
+			en.Encode(sub)
+			ss = append(ss, b.String())
 		}
 	}
 	t.output(OutputLevel_Debug, strings.Join(ss, ""))
@@ -438,11 +443,9 @@ func (t *Logger) itoa(buf *[]byte, i int, wid int) {
 }
 
 func (t *Logger) makeStr(level int, format string, v ...interface{}) (buf []byte) {
-	// level.. [DEBUG]
+	// level.. [DBG]
 	if t.PrefixFlag&Llevel != 0 {
-		buf = append(buf, '[')
 		buf = append(buf, logLevelStr[level]...)
-		buf = append(buf, ']', ' ')
 	}
 
 	// time.. 2022/02/10 15:00:22
@@ -476,7 +479,7 @@ func (t *Logger) makeStr(level int, format string, v ...interface{}) (buf []byte
 	}
 
 	// logx_test.go:9 (funcName):
-	if t.PrefixFlag&(Lshortfile|Llongfile|LfuncName) != 0 {
+	if level >= t.FileInfoLevel && t.PrefixFlag&(Lshortfile|Llongfile|LfuncName) != 0 {
 		pc, file, line, ok := runtime.Caller(t.callSkip)
 		if ok {
 			if t.PrefixFlag&(Lshortfile|Llongfile) != 0 {
