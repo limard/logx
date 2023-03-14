@@ -18,8 +18,9 @@ import (
 	"time"
 )
 
+// var log = NewLogger("", "")
+
 var logLevelStr = []string{"[DBG]", "[INF]", "[WAR]", "[ERR]", "[FAT]"}
-var log = NewLogger("", "")
 
 // const value
 const (
@@ -48,7 +49,7 @@ const (
 	LstdFlags = Lshortfile | Ldate | Ltime | LfuncName | Llevel
 )
 
-//Logger struct
+// Logger struct
 type Logger struct {
 	OutFile          *os.File
 	LastError        error
@@ -111,7 +112,7 @@ func NewLogger(path, name string) *Logger {
 			OutputLevel string
 			OutputFlag  []string
 		}{}
-		json.Unmarshal(buf, &c1)
+		_ = json.Unmarshal(buf, &c1)
 
 		if len(c1.OutputFlag) != 0 {
 			l.OutputFlag = 0
@@ -173,14 +174,14 @@ func (t *Logger) DebugToJson(v ...interface{}) {
 	}
 	var ss []string
 	for _, sub := range v {
-		switch sub.(type) {
+		switch sub := sub.(type) {
 		case string:
-			ss = append(ss, sub.(string))
+			ss = append(ss, sub)
 		default:
 			b := &bytes.Buffer{}
 			en := json.NewEncoder(b)
 			en.SetEscapeHTML(false)
-			en.Encode(sub)
+			_ = en.Encode(sub)
 			ss = append(ss, b.String())
 		}
 	}
@@ -280,14 +281,14 @@ func (t *Logger) getFileHandle() error {
 	}
 
 	files := make([]string, 0)
-	filepath.Walk(t.LogPath, func(fPath string, fInfo os.FileInfo, err error) error {
+	_ = filepath.Walk(t.LogPath, func(fPath string, fInfo os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 		if fInfo.IsDir() || !strings.HasPrefix(fInfo.Name(), t.LogName+`.`) || !strings.HasSuffix(fInfo.Name(), ".log") {
 			return nil
 		}
-		if time.Now().Sub(fInfo.ModTime()) > t.LogSaveTime {
+		if time.Since(fInfo.ModTime()) > t.LogSaveTime {
 			os.Remove(fPath)
 			return nil
 		}
@@ -308,7 +309,7 @@ func (t *Logger) getFileHandle() error {
 				if e != nil {
 					fmt.Println("logx:", e)
 				} else {
-					t.OutFile.Write([]byte("\r\n==================================================\r\n"))
+					_, _ = t.OutFile.Write([]byte("\r\n==================================================\r\n"))
 				}
 			} else if e != nil {
 				fmt.Println("logx:", e)
@@ -384,15 +385,15 @@ func (t *Logger) output(level int, format string, v ...interface{}) {
 	if t.OutputFlag&OutputFlag_File != 0 {
 		e := t.renewLogFile()
 		if e != nil {
-			t.ConsoleOutWriter.Write([]byte(e.Error()))
-			t.ConsoleOutWriter.Write([]byte("\n"))
+			_, _ = t.ConsoleOutWriter.Write([]byte(e.Error()))
+			_, _ = t.ConsoleOutWriter.Write([]byte("\n"))
 
 			if strings.Contains(e.Error(), "permission denied") {
 				t.OutputFlag &= ^OutputFlag_File
 			}
 		} else {
 			t.muFile.Lock()
-			t.OutFile.Write(buf)
+			_, _ = t.OutFile.Write(buf)
 			t.muFile.Unlock()
 		}
 	}
@@ -403,23 +404,23 @@ func (t *Logger) output(level int, format string, v ...interface{}) {
 			switch level {
 			case OutputLevel_Debug:
 				// t.ConsoleOutWriter.Write([]byte("\033[0;39;49m"))
-				t.ConsoleOutWriter.Write(buf)
+				_, _ = t.ConsoleOutWriter.Write(buf)
 				// t.ConsoleOutWriter.Write([]byte("\u001B[0m"))
 			case OutputLevel_Info:
 				// t.ConsoleOutWriter.Write([]byte("\033[0;34;49m"))
-				t.ConsoleOutWriter.Write(buf)
+				_, _ = t.ConsoleOutWriter.Write(buf)
 				// t.ConsoleOutWriter.Write([]byte("\u001B[0m"))
 			case OutputLevel_Warn:
-				t.ConsoleOutWriter.Write([]byte("\033[1;33;49m"))
-				t.ConsoleOutWriter.Write(buf)
-				t.ConsoleOutWriter.Write([]byte("\u001B[0m"))
+				// _, _ = t.ConsoleOutWriter.Write([]byte("\033[1;33;49m"))
+				_, _ = t.ConsoleOutWriter.Write(buf)
+				// _, _ = t.ConsoleOutWriter.Write([]byte("\u001B[0m"))
 			case OutputLevel_Error:
-				t.ConsoleOutWriter.Write([]byte("\033[1;31;49m"))
-				t.ConsoleOutWriter.Write(buf)
-				t.ConsoleOutWriter.Write([]byte("\u001B[0m"))
+				// _, _ = t.ConsoleOutWriter.Write([]byte("\033[1;31;49m"))
+				_, _ = t.ConsoleOutWriter.Write(buf)
+				// _, _ = t.ConsoleOutWriter.Write([]byte("\u001B[0m"))
 			}
 		} else {
-			t.ConsoleOutWriter.Write(buf)
+			_, _ = t.ConsoleOutWriter.Write(buf)
 		}
 		t.mu.Unlock()
 	}
