@@ -1,3 +1,3 @@
-module limard.com/limard/logx
+module github.com/limard/logx
 
 go 1.13
