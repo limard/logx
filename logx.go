@@ -1,13 +1,12 @@
 package logx
 
-// version: 2022/9/20
+// version: 2023/9/20
 
 import (
 	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -20,7 +19,7 @@ import (
 
 // var log = NewLogger("", "")
 
-var logLevelStr = []string{"[DBG]", "[INF]", "[WAR]", "[ERR]", "[FAT]"}
+var logLevelStr = []string{"[D]", "[I]", "[W]", "[E]", "[F]"}
 
 // const value
 const (
@@ -77,7 +76,7 @@ type Logger struct {
 func NewLogger(path, name string) *Logger {
 	l := &Logger{
 		FilePerm:         os.FileMode(0666),
-		LineMaxLength:    1024,
+		LineMaxLength:    -1,
 		LogPath:          path,
 		LogName:          name,
 		OutputFlag:       OutputFlag_File | OutputFlag_Console,
@@ -106,7 +105,7 @@ func NewLogger(path, name string) *Logger {
 	}
 
 	// read json configuration
-	buf, e := ioutil.ReadFile("log.json")
+	buf, e := os.ReadFile("log.json")
 	if e == nil {
 		c1 := struct {
 			OutputLevel string
@@ -379,8 +378,18 @@ func (t *Logger) renewLogFile() (e error) {
 	return nil
 }
 
+var bufferPool = sync.Pool{
+	New: func() any { return &bytes.Buffer{} },
+}
+
 func (t *Logger) output(level int, format string, v ...interface{}) {
-	buf := t.makeStr(level, format, v...)
+	buf := bufferPool.Get().(*bytes.Buffer)
+	defer func() {
+		bufferPool.Put(buf)
+	}()
+
+	buf.Reset()
+	t.makeStr(buf, level, format, v...)
 
 	if t.OutputFlag&OutputFlag_File != 0 {
 		e := t.renewLogFile()
@@ -393,7 +402,7 @@ func (t *Logger) output(level int, format string, v ...interface{}) {
 			}
 		} else {
 			t.muFile.Lock()
-			_, _ = t.OutFile.Write(buf)
+			_, _ = t.OutFile.Write(buf.Bytes())
 			t.muFile.Unlock()
 		}
 	}
@@ -404,30 +413,30 @@ func (t *Logger) output(level int, format string, v ...interface{}) {
 			switch level {
 			case OutputLevel_Debug:
 				// t.ConsoleOutWriter.Write([]byte("\033[0;39;49m"))
-				_, _ = t.ConsoleOutWriter.Write(buf)
+				_, _ = t.ConsoleOutWriter.Write(buf.Bytes())
 				// t.ConsoleOutWriter.Write([]byte("\u001B[0m"))
 			case OutputLevel_Info:
 				// t.ConsoleOutWriter.Write([]byte("\033[0;34;49m"))
-				_, _ = t.ConsoleOutWriter.Write(buf)
+				_, _ = t.ConsoleOutWriter.Write(buf.Bytes())
 				// t.ConsoleOutWriter.Write([]byte("\u001B[0m"))
 			case OutputLevel_Warn:
 				// _, _ = t.ConsoleOutWriter.Write([]byte("\033[1;33;49m"))
-				_, _ = t.ConsoleOutWriter.Write(buf)
+				_, _ = t.ConsoleOutWriter.Write(buf.Bytes())
 				// _, _ = t.ConsoleOutWriter.Write([]byte("\u001B[0m"))
 			case OutputLevel_Error:
 				// _, _ = t.ConsoleOutWriter.Write([]byte("\033[1;31;49m"))
-				_, _ = t.ConsoleOutWriter.Write(buf)
+				_, _ = t.ConsoleOutWriter.Write(buf.Bytes())
 				// _, _ = t.ConsoleOutWriter.Write([]byte("\u001B[0m"))
 			}
 		} else {
-			_, _ = t.ConsoleOutWriter.Write(buf)
+			_, _ = t.ConsoleOutWriter.Write(buf.Bytes())
 		}
 		t.mu.Unlock()
 	}
 }
 
 // Cheap integer to fixed-width decimal ASCII. Give a negative width to avoid zero-padding.
-func (t *Logger) itoa(buf *[]byte, i int, wid int) {
+func (t *Logger) itoa(buf *bytes.Buffer, i int, wid int) {
 	// Assemble decimal in reverse order.
 	var b [20]byte
 	bp := len(b) - 1
@@ -440,13 +449,13 @@ func (t *Logger) itoa(buf *[]byte, i int, wid int) {
 	}
 	// i < 10
 	b[bp] = byte('0' + i)
-	*buf = append(*buf, b[bp:]...)
+	buf.Write(b[bp:])
 }
 
-func (t *Logger) makeStr(level int, format string, v ...interface{}) (buf []byte) {
+func (t *Logger) makeStr(buf *bytes.Buffer, level int, format string, v ...interface{}) {
 	// level.. [DBG]
 	if t.PrefixFlag&Llevel != 0 {
-		buf = append(buf, logLevelStr[level]...)
+		buf.WriteString(logLevelStr[level])
 	}
 
 	// time.. 2022/02/10 15:00:22
@@ -457,25 +466,25 @@ func (t *Logger) makeStr(level int, format string, v ...interface{}) (buf []byte
 		}
 		if t.PrefixFlag&Ldate != 0 {
 			year, month, day := tm.Date()
-			t.itoa(&buf, year%100, 2)
-			buf = append(buf, '/')
-			t.itoa(&buf, int(month), 2)
-			buf = append(buf, '/')
-			t.itoa(&buf, day, 2)
-			buf = append(buf, ' ')
+			t.itoa(buf, year%100, 2)
+			buf.WriteByte('/')
+			t.itoa(buf, int(month), 2)
+			buf.WriteByte('/')
+			t.itoa(buf, day, 2)
+			buf.WriteByte(' ')
 		}
 		if t.PrefixFlag&(Ltime|Lmicroseconds) != 0 {
 			hour, min, sec := tm.Clock()
-			t.itoa(&buf, hour, 2)
-			buf = append(buf, ':')
-			t.itoa(&buf, min, 2)
-			buf = append(buf, ':')
-			t.itoa(&buf, sec, 2)
+			t.itoa(buf, hour, 2)
+			buf.WriteByte(':')
+			t.itoa(buf, min, 2)
+			buf.WriteByte(':')
+			t.itoa(buf, sec, 2)
 			if t.PrefixFlag&Lmicroseconds != 0 {
-				buf = append(buf, '.')
-				t.itoa(&buf, tm.Nanosecond()/1e3, 6)
+				buf.WriteByte('.')
+				t.itoa(buf, tm.Nanosecond()/1e3, 6)
 			}
-			buf = append(buf, ' ')
+			buf.WriteByte(' ')
 		}
 	}
 
@@ -494,38 +503,39 @@ func (t *Logger) makeStr(level int, format string, v ...interface{}) (buf []byte
 					}
 					file = short
 				}
-				buf = append(buf, file...)
-				buf = append(buf, ':')
-				t.itoa(&buf, line, -1)
+				buf.WriteString(file)
+				buf.WriteByte(':')
+				t.itoa(buf, line, -1)
 			}
 
 			if t.PrefixFlag&LfuncName != 0 {
 				funcName := runtime.FuncForPC(pc).Name()
 				s := strings.Split(funcName, ".")
 				funcName = s[len(s)-1]
-				buf = append(buf, ' ')
-				buf = append(buf, funcName...)
+				buf.WriteByte(' ')
+				buf.WriteString(funcName)
 				//buf = append(buf, ')')
 			}
-			buf = append(buf, ':', ' ')
+			buf.WriteByte(':')
+			buf.WriteByte(' ')
 		}
 	}
 
 	// content
 	if format == "" {
-		buf = append(buf, fmt.Sprint(v...)...)
+		buf.WriteString(fmt.Sprint(v...))
 	} else {
-		buf = append(buf, fmt.Sprintf(format, v...)...)
+		buf.WriteString(fmt.Sprintf(format, v...))
 	}
 
 	// limit max length
-	if len(buf) > t.LineMaxLength {
-		buf = append(buf, buf[:t.LineMaxLength]...)
-		buf = append(buf, ' ', '.', '.', '.')
+	if t.LineMaxLength > 0 && buf.Len() > t.LineMaxLength {
+		buf.Truncate(t.LineMaxLength)
+		buf.Write([]byte{' ', '.', '.', '.'})
 	}
 
-	if len(buf) < 2 || buf[len(buf)-2] != '\r' || buf[len(buf)-1] != '\n' {
-		buf = append(buf, '\r', '\n')
+	if buf.Len() < 1 || buf.Bytes()[len(buf.Bytes())-1] != '\n' {
+		buf.WriteByte('\n')
 	}
-	return buf
+	return
 }
