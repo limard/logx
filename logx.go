@@ -1,6 +1,6 @@
-package logx
+package log
 
-// version: 2023/9/20
+// version: 2023/11/29
 
 import (
 	"bytes"
@@ -19,7 +19,7 @@ import (
 
 // var log = NewLogger("", "")
 
-var logLevelStr = []string{"[D]", "[I]", "[W]", "[E]", "[F]"}
+var logLevelStr = []string{"[DBG]", "[INF]", "[WAR]", "[ERR]", "[FAL]"}
 
 // const value
 const (
@@ -45,7 +45,7 @@ const (
 	Lmsgprefix
 	LfuncName
 	Llevel
-	LstdFlags = Lshortfile | Ldate | Ltime | LfuncName | Llevel
+	LstdFlags = Lshortfile | Ldate | Ltime | LfuncName | Llevel | Lmicroseconds
 )
 
 // Logger struct
@@ -61,16 +61,17 @@ type Logger struct {
 	PrefixFlag       int    // properties L...
 	FileInfoLevel    int    // 输出级别，用于在debug等常见的级别上，不输出文件、函数信息
 	MaxLogNumber     int    // 最多log文件个数
+	MaxFileSize      int64  // 最大文件尺寸（字节）
 	ContinuousLog    bool   // 连续在上一个文件中输出，适用于经常被调用启动的程序日志
 	LogSaveTime      time.Duration
 	ConsoleOutWriter io.Writer // 可重定向到父进程中
 	ConsoleColor     bool
 
-	mu       sync.Mutex //log mutex
-	writeCnt int        // 记录写入次数
-	Prefix   []byte     // Prefix to write at beginning of each line
-	muFile   sync.Mutex
-	callSkip int
+	mu         sync.Mutex //log mutex
+	logCounter int        // 记录写入次数
+	Prefix     []byte     // Prefix to write at beginning of each line
+	muFile     sync.Mutex
+	callSkip   int
 }
 
 func NewLogger(path, name string) *Logger {
@@ -83,11 +84,12 @@ func NewLogger(path, name string) *Logger {
 		OutputLevel:      OutputLevel_Debug,
 		PrefixFlag:       LstdFlags,
 		MaxLogNumber:     3,
+		MaxFileSize:      3 * 1024 * 1024,
 		ContinuousLog:    true,
 		LogSaveTime:      6 * 24 * time.Hour,
 		ConsoleOutWriter: os.Stdout,
 		ConsoleColor:     true,
-		writeCnt:         0,
+		logCounter:       0,
 		callSkip:         3,
 	}
 
@@ -105,11 +107,20 @@ func NewLogger(path, name string) *Logger {
 	}
 
 	// read json configuration
-	buf, e := os.ReadFile("log.json")
+	executable, _ := os.Executable()
+	exeDir := filepath.Dir(executable)
+	buf, e := os.ReadFile(filepath.Join(exeDir, "log.json"))
 	if e == nil {
+		// 切掉BOM
+		if buf[0] == 0xEF && buf[1] == 0xBB && buf[2] == 0xBF {
+			buf = buf[3:]
+		}
+
 		c1 := struct {
-			OutputLevel string
-			OutputFlag  []string
+			OutputLevel  string
+			OutputFlag   []string
+			MaxFileSize  int64
+			MaxLogNumber int
 		}{}
 		_ = json.Unmarshal(buf, &c1)
 
@@ -138,6 +149,14 @@ func NewLogger(path, name string) *Logger {
 			case "fatal":
 				l.OutputLevel = OutputLevel_Fatal
 			}
+		}
+
+		if c1.MaxLogNumber != 0 {
+			l.MaxLogNumber = c1.MaxLogNumber
+		}
+
+		if c1.MaxFileSize != 0 {
+			l.MaxFileSize = c1.MaxFileSize
 		}
 	}
 
@@ -272,6 +291,15 @@ func (t *Logger) SetFlags(flag int) {
 
 ///////////
 
+// 判断所给路径文件/文件夹是否存在
+func isFileExists(path string) bool {
+	_, err := os.Stat(path) //os.Stat获取文件信息
+	if err != nil {
+		return os.IsExist(err)
+	}
+	return true
+}
+
 func (t *Logger) getFileHandle() error {
 	e := os.MkdirAll(t.LogPath, 0777)
 	if e != nil {
@@ -279,46 +307,51 @@ func (t *Logger) getFileHandle() error {
 		return e
 	}
 
-	files := make([]string, 0)
-	_ = filepath.Walk(t.LogPath, func(fPath string, fInfo os.FileInfo, err error) error {
-		if err != nil {
-			return err
+	makeFileName := func(index int) string {
+		if index == 0 {
+			return filepath.Join(t.LogPath, fmt.Sprintf(`%s.log`, t.LogName))
+		} else {
+			return filepath.Join(t.LogPath, fmt.Sprintf(`%s.log.%d`, t.LogName, index))
 		}
-		if fInfo.IsDir() || !strings.HasPrefix(fInfo.Name(), t.LogName+`.`) || !strings.HasSuffix(fInfo.Name(), ".log") {
-			return nil
-		}
-		if time.Since(fInfo.ModTime()) > t.LogSaveTime {
-			os.Remove(fPath)
-			return nil
-		}
-		files = append(files, fInfo.Name())
-		return nil
-	})
-	for _, value := range t.getNeedDeleteLogfile(files) {
-		os.Remove(t.LogPath + value)
 	}
 
-	if t.ContinuousLog {
-		f := t.getNewestLogfile(files)
-		if len(f) > 0 {
-			filename := filepath.Join(t.LogPath, f)
-			fi, e := os.Stat(filename)
-			if e == nil && fi.Size() < 1024*1024*3 {
-				t.OutFile, e = os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, t.FilePerm)
-				if e != nil {
-					fmt.Println("logx:", e)
-				} else {
-					_, _ = t.OutFile.Write([]byte("\r\n==================================================\r\n"))
-				}
-			} else if e != nil {
-				fmt.Println("logx:", e)
-			}
+	firstName := makeFileName(0)
+
+	f, e := os.OpenFile(firstName, os.O_WRONLY|os.O_APPEND|os.O_CREATE, t.FilePerm)
+	if e != nil {
+		fmt.Println("logx:", e)
+		t.LastError = e
+		return e
+	}
+
+	fi, _ := f.Stat()
+
+	if fi.Size() > t.MaxFileSize {
+		f.Close()
+	} else {
+		t.OutFile = f
+		return nil
+	}
+
+	lastFileName := makeFileName(t.MaxLogNumber)
+	if isFileExists(lastFileName) {
+		e = os.Remove(lastFileName)
+		if e != nil {
+			fmt.Fprintf(os.Stderr, "delete old log file %s failed\n", e.Error())
 		}
 	}
-	if t.OutFile == nil {
-		filename := filepath.Join(t.LogPath, t.LogName+`.`+time.Now().Format(`060102_150405`)+`.log`)
-		t.OutFile, e = os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, t.FilePerm)
+
+	for i := t.MaxLogNumber; i >= 1; i-- {
+		from := makeFileName(i - 1)
+		to := makeFileName(i)
+		e := os.Rename(from, to)
+		if e != nil {
+			fmt.Fprintf(os.Stderr, "rename old log file %s to %s failed: %s\n", from, to, e.Error())
+		}
 	}
+
+	newFileName := makeFileName(0)
+	t.OutFile, e = os.OpenFile(newFileName, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, t.FilePerm)
 	if e != nil {
 		fmt.Println("logx:", e)
 		t.LastError = e
@@ -346,30 +379,30 @@ func (t *Logger) getNewestLogfile(filesName []string) string {
 }
 
 func (t *Logger) renewLogFile() (e error) {
-	if t.OutFile != nil && t.writeCnt < 200 {
-		t.writeCnt++
+	if t.OutFile != nil && t.logCounter < 200 {
+		t.logCounter++
 		return nil
 	}
+	t.logCounter = 1
 
 	t.muFile.Lock()
 	defer t.muFile.Unlock()
 
-	t.writeCnt = 0
-
-	// 检查当前文件的大小
-	if t.OutFile != nil {
-		fi, e := t.OutFile.Stat()
-		if e == nil && fi.Size() < 1024*1024*3 {
-			return nil
+	if t.OutFile == nil {
+		e = t.getFileHandle()
+		if e != nil {
+			return e
 		}
-
-		t.OutFile.Close()
 	}
 
-	// 新文件
-	e = t.getFileHandle()
-	if e != nil {
-		return e
+	fi, _ := t.OutFile.Stat()
+	if fi.Size() > t.MaxFileSize {
+		t.OutFile.Close()
+		t.OutFile = nil
+		e = t.getFileHandle()
+		if e != nil {
+			return e
+		}
 	}
 
 	if t.OutFile == nil {
