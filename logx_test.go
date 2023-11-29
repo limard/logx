@@ -48,7 +48,7 @@ func TestCleanFile(t *testing.T) {
 	}
 }
 
-//BenchmarkName-8   	  730000	      1554 ns/op
+// BenchmarkName-8   	  730000	      1554 ns/op
 func BenchmarkSpeed(b *testing.B) {
 	SetOutputFlag(0)
 	for i := 0; i < b.N; i++ {

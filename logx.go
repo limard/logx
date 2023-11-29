@@ -1,4 +1,4 @@
-package log
+package logx
 
 // version: 2023/11/29
 
