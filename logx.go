@@ -1,23 +1,17 @@
 package logx
 
-// version: 2023/11/29
-
 import (
 	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"strings"
 	"sync"
 	"time"
 )
-
-// var log = NewLogger("", "")
 
 var logLevelStr = []string{"[DBG]", "[INF]", "[WAR]", "[ERR]", "[FAL]"}
 
@@ -36,13 +30,12 @@ const (
 )
 
 const (
-	Ldate         = 1 << iota // the date in the local time zone: 2009/01/23
+	Ldate         = 1 << iota // the date in the local time zone: 09/01/23
 	Ltime                     // the time in the local time zone: 01:23:23
 	Lmicroseconds             // microsecond resolution: 01:23:23.123123.  assumes PrefixFlag_Time.
 	Llongfile                 // full file name and line number: /a/b/c/d.go:23
 	Lshortfile                // final file name element and line number: d.go:23. overrides PrefixFlag_Longfile
 	LUTC                      // if PrefixFlag_Date or PrefixFlag_Time is set, use UTC rather than the local time zone
-	Lmsgprefix
 	LfuncName
 	Llevel
 	LstdFlags = Lshortfile | Ldate | Ltime | LfuncName | Llevel | Lmicroseconds
@@ -50,28 +43,25 @@ const (
 
 // Logger struct
 type Logger struct {
-	OutFile          *os.File
-	LastError        error
-	FilePerm         os.FileMode
-	LineMaxLength    int    // 一行最大的长度
-	LogPath          string // log的保存目录
-	LogName          string // log的文件名，默认为程序名
-	OutputFlag       int    // 输出Flag
-	OutputLevel      int    // 输出级别
-	PrefixFlag       int    // properties L...
-	FileInfoLevel    int    // 输出级别，用于在debug等常见的级别上，不输出文件、函数信息
-	MaxLogNumber     int    // 最多log文件个数
-	MaxFileSize      int64  // 最大文件尺寸（字节）
-	ContinuousLog    bool   // 连续在上一个文件中输出，适用于经常被调用启动的程序日志
-	LogSaveTime      time.Duration
-	ConsoleOutWriter io.Writer // 可重定向到父进程中
-	ConsoleColor     bool
+	LastError        error       // LOGX运行错误
+	FilePerm         os.FileMode // 日志文件的文件权限 默认666
+	LineMaxLength    int         // 一行最大的长度，-1为不限制
+	LogPath          string      // 日志的保存目录
+	LogName          string      // 日志的文件名，默认为程序名
+	OutputFlag       int         // 日志输出位置 OutputFlag_File Console
+	OutputLevel      int         // 输出级别 OutputLevel_Debug Info Warn Error Fatal
+	PrefixFlag       int         // 日志的前缀信息 Ldate L...
+	MaxLogNumber     int         // 日志文件保存个数
+	MaxFileSize      int64       // 日志文件最大大小（字节）
+	ContinuousLog    bool        // 是否连续在上一个文件中输出，适用于经常被调用启动的程序日志 默认是
+	ConsoleOutWriter io.Writer   // 可重定向到父进程中
+	ConsoleColor     bool        // 在控制台输出时，Warn和Error是否加重颜色标识
 
-	mu         sync.Mutex //log mutex
-	logCounter int        // 记录写入次数
-	Prefix     []byte     // Prefix to write at beginning of each line
-	muFile     sync.Mutex
-	callSkip   int
+	mutexConsoleOutWriter sync.Mutex // 保护向控制台写数据时不乱序
+	logCounter            int        // 记录写入次数
+	mutexFile             sync.Mutex // 保护outFile
+	outFile               *os.File   // 当前输出的文件
+	callSkip              int        //
 }
 
 func NewLogger(path, name string) *Logger {
@@ -86,30 +76,27 @@ func NewLogger(path, name string) *Logger {
 		MaxLogNumber:     3,
 		MaxFileSize:      3 * 1024 * 1024,
 		ContinuousLog:    true,
-		LogSaveTime:      6 * 24 * time.Hour,
 		ConsoleOutWriter: os.Stdout,
 		ConsoleColor:     true,
 		logCounter:       0,
 		callSkip:         3,
 	}
 
+	executable, _ := os.Executable()
 	if len(l.LogPath) == 0 {
 		if runtime.GOOS == "linux" {
 			l.LogPath = `/var/log/`
 		} else {
-			l.LogPath = filepath.Dir(os.Args[0])
+			l.LogPath = filepath.Dir(executable)
 		}
 	}
 
 	if len(l.LogName) == 0 {
-		n, _ := exec.LookPath(os.Args[0])
-		l.LogName = filepath.Base(n)
+		l.LogName = filepath.Base(executable)
 	}
 
 	// read json configuration
-	executable, _ := os.Executable()
-	exeDir := filepath.Dir(executable)
-	buf, e := os.ReadFile(filepath.Join(exeDir, "log.json"))
+	buf, e := os.ReadFile(filepath.Join(l.LogPath, "log.json"))
 	if e == nil {
 		// 切掉BOM
 		if buf[0] == 0xEF && buf[1] == 0xBB && buf[2] == 0xBF {
@@ -204,6 +191,14 @@ func (t *Logger) DebugToJson(v ...interface{}) {
 		}
 	}
 	t.output(OutputLevel_Debug, strings.Join(ss, ""))
+}
+
+func (t *Logger) Write(b []byte) (n int, err error) {
+	if t.OutputLevel > OutputLevel_Debug {
+		return
+	}
+	t.output(OutputLevel_Debug, string(b))
+	return len(b), nil
 }
 
 func (t *Logger) Print(v ...interface{}) {
@@ -329,29 +324,33 @@ func (t *Logger) getFileHandle() error {
 	if fi.Size() > t.MaxFileSize {
 		f.Close()
 	} else {
-		t.OutFile = f
+		t.outFile = f
 		return nil
 	}
 
+	// 删除最老的文件
 	lastFileName := makeFileName(t.MaxLogNumber)
 	if isFileExists(lastFileName) {
 		e = os.Remove(lastFileName)
 		if e != nil {
-			fmt.Fprintf(os.Stderr, "delete old log file %s failed\n", e.Error())
+			fmt.Fprintf(os.Stderr, "logx: delete old log file %s failed\n", e.Error())
+			t.LastError = e
 		}
 	}
 
+	// 文件名逐个后移
 	for i := t.MaxLogNumber; i >= 1; i-- {
 		from := makeFileName(i - 1)
 		to := makeFileName(i)
 		e := os.Rename(from, to)
 		if e != nil {
-			fmt.Fprintf(os.Stderr, "rename old log file %s to %s failed: %s\n", from, to, e.Error())
+			fmt.Fprintf(os.Stderr, "logx: rename old log file %s to %s failed: %s\n", from, to, e.Error())
+			t.LastError = e
 		}
 	}
 
 	newFileName := makeFileName(0)
-	t.OutFile, e = os.OpenFile(newFileName, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, t.FilePerm)
+	t.outFile, e = os.OpenFile(newFileName, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, t.FilePerm)
 	if e != nil {
 		fmt.Println("logx:", e)
 		t.LastError = e
@@ -360,52 +359,34 @@ func (t *Logger) getFileHandle() error {
 	return nil
 }
 
-// 获取同名Log中最老的数个
-func (t *Logger) getNeedDeleteLogfile(filesName []string) []string {
-	if len(filesName) < t.MaxLogNumber {
-		return nil
-	}
-	sort.Strings(filesName)
-	return filesName[0 : len(filesName)-t.MaxLogNumber]
-}
-
-// 获取同名Log中最新的一个
-func (t *Logger) getNewestLogfile(filesName []string) string {
-	if len(filesName) == 0 {
-		return ""
-	}
-	sort.Strings(filesName)
-	return filesName[len(filesName)-1]
-}
-
 func (t *Logger) renewLogFile() (e error) {
-	if t.OutFile != nil && t.logCounter < 200 {
+	if t.outFile != nil && t.logCounter < 200 {
 		t.logCounter++
 		return nil
 	}
 	t.logCounter = 1
 
-	t.muFile.Lock()
-	defer t.muFile.Unlock()
+	t.mutexFile.Lock()
+	defer t.mutexFile.Unlock()
 
-	if t.OutFile == nil {
+	if t.outFile == nil {
 		e = t.getFileHandle()
 		if e != nil {
 			return e
 		}
 	}
 
-	fi, _ := t.OutFile.Stat()
+	fi, _ := t.outFile.Stat()
 	if fi.Size() > t.MaxFileSize {
-		t.OutFile.Close()
-		t.OutFile = nil
+		t.outFile.Close()
+		t.outFile = nil
 		e = t.getFileHandle()
 		if e != nil {
 			return e
 		}
 	}
 
-	if t.OutFile == nil {
+	if t.outFile == nil {
 		return fmt.Errorf("OutFile is nil")
 	}
 	return nil
@@ -434,37 +415,33 @@ func (t *Logger) output(level int, format string, v ...interface{}) {
 				t.OutputFlag &= ^OutputFlag_File
 			}
 		} else {
-			t.muFile.Lock()
-			_, _ = t.OutFile.Write(buf.Bytes())
-			t.muFile.Unlock()
+			t.mutexFile.Lock()
+			_, _ = t.outFile.Write(buf.Bytes())
+			t.mutexFile.Unlock()
 		}
 	}
 
 	if t.OutputFlag&OutputFlag_Console != 0 {
-		t.mu.Lock()
+		t.mutexConsoleOutWriter.Lock()
 		if t.ConsoleColor {
 			switch level {
 			case OutputLevel_Debug:
-				// t.ConsoleOutWriter.Write([]byte("\033[0;39;49m"))
 				_, _ = t.ConsoleOutWriter.Write(buf.Bytes())
-				// t.ConsoleOutWriter.Write([]byte("\u001B[0m"))
 			case OutputLevel_Info:
-				// t.ConsoleOutWriter.Write([]byte("\033[0;34;49m"))
 				_, _ = t.ConsoleOutWriter.Write(buf.Bytes())
-				// t.ConsoleOutWriter.Write([]byte("\u001B[0m"))
 			case OutputLevel_Warn:
-				// _, _ = t.ConsoleOutWriter.Write([]byte("\033[1;33;49m"))
+				_, _ = t.ConsoleOutWriter.Write([]byte("\033[1;33;49m"))
 				_, _ = t.ConsoleOutWriter.Write(buf.Bytes())
-				// _, _ = t.ConsoleOutWriter.Write([]byte("\u001B[0m"))
+				_, _ = t.ConsoleOutWriter.Write([]byte("\u001B[0m"))
 			case OutputLevel_Error:
-				// _, _ = t.ConsoleOutWriter.Write([]byte("\033[1;31;49m"))
+				_, _ = t.ConsoleOutWriter.Write([]byte("\033[1;31;49m"))
 				_, _ = t.ConsoleOutWriter.Write(buf.Bytes())
-				// _, _ = t.ConsoleOutWriter.Write([]byte("\u001B[0m"))
+				_, _ = t.ConsoleOutWriter.Write([]byte("\u001B[0m"))
 			}
 		} else {
 			_, _ = t.ConsoleOutWriter.Write(buf.Bytes())
 		}
-		t.mu.Unlock()
+		t.mutexConsoleOutWriter.Unlock()
 	}
 }
 
@@ -521,8 +498,8 @@ func (t *Logger) makeStr(buf *bytes.Buffer, level int, format string, v ...inter
 		}
 	}
 
-	// logx_test.go:9 (funcName):
-	if level >= t.FileInfoLevel && t.PrefixFlag&(Lshortfile|Llongfile|LfuncName) != 0 {
+	// logx_test.go:9 funcName:
+	if t.PrefixFlag&(Lshortfile|Llongfile|LfuncName) != 0 {
 		pc, file, line, ok := runtime.Caller(t.callSkip)
 		if ok {
 			if t.PrefixFlag&(Lshortfile|Llongfile) != 0 {
@@ -570,5 +547,4 @@ func (t *Logger) makeStr(buf *bytes.Buffer, level int, format string, v ...inter
 	if buf.Len() < 1 || buf.Bytes()[len(buf.Bytes())-1] != '\n' {
 		buf.WriteByte('\n')
 	}
-	return
 }
