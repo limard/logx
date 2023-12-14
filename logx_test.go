@@ -31,7 +31,7 @@ func TestCleanFile(t *testing.T) {
 // BenchmarkName-8   	  730000	      1554 ns/op
 func BenchmarkSpeed(b *testing.B) {
 	log := NewLogger("log", "text")
-	log.SetFlags(0)
+	log.OutputFlag = 0
 	for i := 0; i < b.N; i++ {
 		log.Debug("123")
 	}

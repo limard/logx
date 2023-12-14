@@ -62,6 +62,7 @@ type Logger struct {
 	mutexFile             sync.Mutex // 保护outFile
 	outFile               *os.File   // 当前输出的文件
 	callSkip              int        //
+	bufferPool            sync.Pool  // 数据缓冲池
 }
 
 func NewLogger(path, name string) *Logger {
@@ -80,6 +81,9 @@ func NewLogger(path, name string) *Logger {
 		ConsoleColor:     true,
 		logCounter:       0,
 		callSkip:         3,
+		bufferPool: sync.Pool{
+			New: func() any { return &bytes.Buffer{} },
+		},
 	}
 
 	executable, _ := os.Executable()
@@ -193,6 +197,7 @@ func (t *Logger) DebugToJson(v ...interface{}) {
 	t.output(OutputLevel_Debug, strings.Join(ss, ""))
 }
 
+// 兼容io.Writer
 func (t *Logger) Write(b []byte) (n int, err error) {
 	if t.OutputLevel > OutputLevel_Debug {
 		return
@@ -201,6 +206,7 @@ func (t *Logger) Write(b []byte) (n int, err error) {
 	return len(b), nil
 }
 
+// go官方自带的log
 func (t *Logger) Print(v ...interface{}) {
 	if t.OutputLevel > OutputLevel_Debug {
 		return
@@ -280,14 +286,10 @@ func (t *Logger) Fatalf(format string, v ...interface{}) {
 	os.Exit(1)
 }
 
-func (t *Logger) SetFlags(flag int) {
-	t.OutputFlag = flag
-}
-
 ///////////
 
 // 判断所给路径文件/文件夹是否存在
-func isFileExists(path string) bool {
+func (t *Logger) isFileExists(path string) bool {
 	_, err := os.Stat(path) //os.Stat获取文件信息
 	if err != nil {
 		return os.IsExist(err)
@@ -330,7 +332,7 @@ func (t *Logger) getFileHandle() error {
 
 	// 删除最老的文件
 	lastFileName := makeFileName(t.MaxLogNumber)
-	if isFileExists(lastFileName) {
+	if t.isFileExists(lastFileName) {
 		e = os.Remove(lastFileName)
 		if e != nil {
 			fmt.Fprintf(os.Stderr, "logx: delete old log file %s failed\n", e.Error())
@@ -392,14 +394,10 @@ func (t *Logger) renewLogFile() (e error) {
 	return nil
 }
 
-var bufferPool = sync.Pool{
-	New: func() any { return &bytes.Buffer{} },
-}
-
 func (t *Logger) output(level int, format string, v ...interface{}) {
-	buf := bufferPool.Get().(*bytes.Buffer)
+	buf := t.bufferPool.Get().(*bytes.Buffer)
 	defer func() {
-		bufferPool.Put(buf)
+		t.bufferPool.Put(buf)
 	}()
 
 	buf.Reset()
