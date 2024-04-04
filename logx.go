@@ -202,7 +202,7 @@ func (t *Logger) Write(b []byte) (n int, err error) {
 	if t.OutputLevel > OutputLevel_Debug {
 		return
 	}
-	t.output(OutputLevel_Debug, string(b))
+	t.output2(OutputLevel_Debug, bytes.NewBuffer(b))
 	return len(b), nil
 }
 
@@ -403,6 +403,9 @@ func (t *Logger) output(level int, format string, v ...interface{}) {
 	buf.Reset()
 	t.makeStr(buf, level, format, v...)
 
+	t.output2(level, buf)
+}
+func (t *Logger) output2(level int, buf *bytes.Buffer) {
 	if t.OutputFlag&OutputFlag_File != 0 {
 		e := t.renewLogFile()
 		if e != nil {
