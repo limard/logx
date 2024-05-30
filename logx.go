@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -82,7 +83,7 @@ func NewLogger(path, name string) *Logger {
 		logCounter:       0,
 		callSkip:         3,
 		bufferPool: sync.Pool{
-			New: func() any { return &bytes.Buffer{} },
+			New: func() interface{} { return &bytes.Buffer{} },
 		},
 	}
 
@@ -100,7 +101,7 @@ func NewLogger(path, name string) *Logger {
 	}
 
 	// read json configuration
-	buf, e := os.ReadFile(filepath.Join(l.LogPath, "log.json"))
+	buf, e := ioutil.ReadFile(filepath.Join(l.LogPath, "log.json"))
 	if e == nil {
 		// 切掉BOM
 		if buf[0] == 0xEF && buf[1] == 0xBB && buf[2] == 0xBF {
