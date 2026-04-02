@@ -79,11 +79,11 @@ func NewLogger(path, name string) *Logger {
 		MaxFileSize:      3 * 1024 * 1024,
 		ContinuousLog:    true,
 		ConsoleOutWriter: os.Stdout,
-		ConsoleColor:     true,
+		ConsoleColor:     false,
 		logCounter:       0,
 		callSkip:         3,
 		bufferPool: sync.Pool{
-			New: func() interface{} { return &bytes.Buffer{} },
+			New: func() interface{} { return bytes.NewBuffer(make([]byte, 0, 1024)) },
 		},
 	}
 
@@ -101,8 +101,8 @@ func NewLogger(path, name string) *Logger {
 	}
 
 	// read json configuration
-	buf, e := ioutil.ReadFile(filepath.Join(l.LogPath, "log.json"))
-	if e == nil {
+	buf, err := ioutil.ReadFile(filepath.Join(l.LogPath, "log.json"))
+	if err == nil {
 		// 切掉BOM
 		if buf[0] == 0xEF && buf[1] == 0xBB && buf[2] == 0xBF {
 			buf = buf[3:]
@@ -167,15 +167,14 @@ func (t *Logger) Debug(v ...interface{}) {
 	if t.OutputLevel > OutputLevel_Debug {
 		return
 	}
-	t.output(OutputLevel_Debug, "", v...)
+	t.output(OutputLevel_Debug, v...)
 }
 
-// Debugf output a [DEBUG] string with format
 func (t *Logger) Debugf(format string, v ...interface{}) {
 	if t.OutputLevel > OutputLevel_Debug {
 		return
 	}
-	t.output(OutputLevel_Debug, format, v...)
+	t.outputf(OutputLevel_Debug, format, v...)
 }
 
 func (t *Logger) DebugToJson(v ...interface{}) {
@@ -198,12 +197,19 @@ func (t *Logger) DebugToJson(v ...interface{}) {
 	t.output(OutputLevel_Debug, strings.Join(ss, ""))
 }
 
+func (t *Logger) DebugFunc(cb func(buf *bytes.Buffer)) {
+	if t.OutputLevel > OutputLevel_Debug {
+		return
+	}
+	t.outputFunc(OutputLevel_Debug, cb)
+}
+
 // 兼容io.Writer
 func (t *Logger) Write(b []byte) (n int, err error) {
 	if t.OutputLevel > OutputLevel_Debug {
 		return
 	}
-	t.inner_output(OutputLevel_Debug, bytes.NewBuffer(b))
+	t.output_to_file_console(OutputLevel_Debug, bytes.NewBuffer(b))
 	return len(b), nil
 }
 
@@ -212,21 +218,21 @@ func (t *Logger) Print(v ...interface{}) {
 	if t.OutputLevel > OutputLevel_Debug {
 		return
 	}
-	t.output(OutputLevel_Debug, "", v...)
+	t.output(OutputLevel_Debug, v...)
 }
 
 func (t *Logger) Println(v ...interface{}) {
 	if t.OutputLevel > OutputLevel_Debug {
 		return
 	}
-	t.output(OutputLevel_Debug, "", v...)
+	t.output(OutputLevel_Debug, v...)
 }
 
 func (t *Logger) Printf(format string, v ...interface{}) {
 	if t.OutputLevel > OutputLevel_Debug {
 		return
 	}
-	t.output(OutputLevel_Debug, format, v...)
+	t.outputf(OutputLevel_Debug, format, v...)
 }
 
 // Info output a [INFO ] string
@@ -234,15 +240,14 @@ func (t *Logger) Info(v ...interface{}) {
 	if t.OutputLevel > OutputLevel_Info {
 		return
 	}
-	t.output(OutputLevel_Info, "", v...)
+	t.output(OutputLevel_Info, v...)
 }
 
-// Infof output a [INFO ] string with format
 func (t *Logger) Infof(format string, v ...interface{}) {
 	if t.OutputLevel > OutputLevel_Info {
 		return
 	}
-	t.output(OutputLevel_Info, format, v...)
+	t.outputf(OutputLevel_Info, format, v...)
 }
 
 // Warn output a [WARN ] string
@@ -250,15 +255,14 @@ func (t *Logger) Warn(v ...interface{}) {
 	if t.OutputLevel > OutputLevel_Warn {
 		return
 	}
-	t.output(OutputLevel_Warn, "", v...)
+	t.output(OutputLevel_Warn, v...)
 }
 
-// Warnf output a [WARN ] string with format
 func (t *Logger) Warnf(format string, v ...interface{}) {
 	if t.OutputLevel > OutputLevel_Warn {
 		return
 	}
-	t.output(OutputLevel_Warn, format, v...)
+	t.outputf(OutputLevel_Warn, format, v...)
 }
 
 // Error output a [ERROR] string
@@ -266,24 +270,23 @@ func (t *Logger) Error(v ...interface{}) {
 	if t.OutputLevel > OutputLevel_Error {
 		return
 	}
-	t.output(OutputLevel_Error, "", v...)
+	t.output(OutputLevel_Error, v...)
 }
 
-// Errorf output a [ERROR] string with format
 func (t *Logger) Errorf(format string, v ...interface{}) {
 	if t.OutputLevel > OutputLevel_Error {
 		return
 	}
-	t.output(OutputLevel_Error, format, v...)
+	t.outputf(OutputLevel_Error, format, v...)
 }
 
 func (t *Logger) Fatal(v ...interface{}) {
-	t.output(OutputLevel_Fatal, "", v...)
+	t.output(OutputLevel_Fatal, v...)
 	os.Exit(1)
 }
 
 func (t *Logger) Fatalf(format string, v ...interface{}) {
-	t.output(OutputLevel_Fatal, format, v...)
+	t.outputf(OutputLevel_Fatal, format, v...)
 	os.Exit(1)
 }
 
@@ -395,18 +398,79 @@ func (t *Logger) renewLogFile() (e error) {
 	return nil
 }
 
-func (t *Logger) output(level int, format string, v ...interface{}) {
+func (t *Logger) outputf(level int, format string, v ...interface{}) {
 	buf := t.bufferPool.Get().(*bytes.Buffer)
 	defer func() {
 		t.bufferPool.Put(buf)
 	}()
 
 	buf.Reset()
-	t.makeStr(buf, level, format, v...)
 
-	t.inner_output(level, buf)
+	// prefix
+	t.makePrefix(buf, level)
+
+	// content
+	fmt.Fprintf(buf, format, v...)
+
+	// limit max length
+	if t.LineMaxLength > 0 && buf.Len() > t.LineMaxLength {
+		buf.Truncate(t.LineMaxLength)
+		buf.Write([]byte{' ', '.', '.', '.'})
+	}
+
+	ensureLineEndingf(format, buf)
+
+	t.output_to_file_console(level, buf)
 }
-func (t *Logger) inner_output(level int, buf *bytes.Buffer) {
+func (t *Logger) output(level int, v ...interface{}) {
+	buf := t.bufferPool.Get().(*bytes.Buffer)
+	defer func() {
+		t.bufferPool.Put(buf)
+	}()
+
+	buf.Reset()
+
+	// prefix
+	t.makePrefix(buf, level)
+
+	// content
+	fmt.Fprint(buf, v...)
+
+	// limit max length
+	if t.LineMaxLength > 0 && buf.Len() > t.LineMaxLength {
+		buf.Truncate(t.LineMaxLength)
+		buf.Write([]byte{' ', '.', '.', '.'})
+	}
+
+	ensureLineEnding(buf)
+
+	t.output_to_file_console(level, buf)
+}
+func (t *Logger) outputFunc(level int, cb func(buf *bytes.Buffer)) {
+	buf := t.bufferPool.Get().(*bytes.Buffer)
+	defer func() {
+		t.bufferPool.Put(buf)
+	}()
+
+	buf.Reset()
+
+	// prefix
+	t.makePrefix(buf, level)
+
+	// content
+	cb(buf)
+
+	// limit max length
+	if t.LineMaxLength > 0 && buf.Len() > t.LineMaxLength {
+		buf.Truncate(t.LineMaxLength)
+		buf.Write([]byte{' ', '.', '.', '.'})
+	}
+
+	ensureLineEnding(buf)
+
+	t.output_to_file_console(level, buf)
+}
+func (t *Logger) output_to_file_console(level int, buf *bytes.Buffer) {
 	if t.OutputFlag&OutputFlag_File != 0 {
 		e := t.renewLogFile()
 		if e != nil {
@@ -464,7 +528,7 @@ func (t *Logger) itoa(buf *bytes.Buffer, i int, wid int) {
 	buf.Write(b[bp:])
 }
 
-func (t *Logger) makeStr(buf *bytes.Buffer, level int, format string, v ...interface{}) {
+func (t *Logger) makePrefix(buf *bytes.Buffer, level int) {
 	// level.. [DBG]
 	if t.PrefixFlag&Llevel != 0 {
 		buf.WriteString(logLevelStr[level])
@@ -522,8 +586,16 @@ func (t *Logger) makeStr(buf *bytes.Buffer, level int, format string, v ...inter
 
 			if t.PrefixFlag&LfuncName != 0 {
 				funcName := runtime.FuncForPC(pc).Name()
-				s := strings.Split(funcName, ".")
-				funcName = s[len(s)-1]
+				if strings.Contains(funcName, ".func") {
+					// 认为是匿名函数
+					if pc1, _, _, ok := runtime.Caller(t.callSkip + 1); ok {
+						funcName = runtime.FuncForPC(pc1).Name()
+					}
+				}
+				lastDot := strings.LastIndex(funcName, ".")
+				if lastDot > 0 {
+					funcName = funcName[lastDot+1:] // package.(struct).funcName
+				}
 				buf.WriteByte(' ')
 				buf.WriteString(funcName)
 				//buf = append(buf, ')')
@@ -532,19 +604,4 @@ func (t *Logger) makeStr(buf *bytes.Buffer, level int, format string, v ...inter
 			buf.WriteByte(' ')
 		}
 	}
-
-	// content
-	if format == "" {
-		buf.WriteString(fmt.Sprint(v...))
-	} else {
-		buf.WriteString(fmt.Sprintf(format, v...))
-	}
-
-	// limit max length
-	if t.LineMaxLength > 0 && buf.Len() > t.LineMaxLength {
-		buf.Truncate(t.LineMaxLength)
-		buf.Write([]byte{' ', '.', '.', '.'})
-	}
-
-	ensureLineEnding(buf)
 }

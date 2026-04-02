@@ -1,28 +1,29 @@
 package logx
 
-import "bytes"
+import (
+	"bytes"
+)
 
-func ensureLineEnding(buf *bytes.Buffer) {
-	if buf.Len() == 0 {
+func ensureLineEndingf(format string, buf *bytes.Buffer) {
+	if len(format) < 2 {
+		buf.Write([]byte{'\r', '\n'})
 		return
 	}
-
-	data := buf.Bytes()
-	length := len(data)
 
 	// 如果已经以\r\n结尾，不需要修改
-	if length >= 2 && data[length-2] == '\r' && data[length-1] == '\n' {
-		return
-	}
-
-	// 如果以\n结尾但没有\r，替换为\r\n
-	if data[length-1] == '\n' {
-		// 将最后的\n替换为\r\n
-		buf.Truncate(length - 1)
-		buf.WriteString("\r\n")
+	length := len(format)
+	if length >= 2 && format[length-2] == '\r' && format[length-1] == '\n' {
 		return
 	}
 
 	// 如果不以换行符结尾，添加\r\n
-	buf.WriteString("\r\n")
+	buf.Write([]byte{'\r', '\n'})
+}
+
+func ensureLineEnding(buf *bytes.Buffer) {
+	if buf.Len() >= 2 && buf.Bytes()[buf.Len()-2] == '\r' && buf.Bytes()[buf.Len()-1] == '\n' {
+		return
+	}
+
+	buf.Write([]byte{'\r', '\n'})
 }
