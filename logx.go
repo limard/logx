@@ -558,7 +558,7 @@ func (t *Logger) makePrefix(buf *bytes.Buffer, level int) {
 			t.itoa(buf, sec, 2)
 			if t.PrefixFlag&Lmicroseconds != 0 {
 				buf.WriteByte('.')
-				t.itoa(buf, tm.Nanosecond()/1e3, 6)
+				t.itoa(buf, tm.Nanosecond()/1e3, 3)
 			}
 			buf.WriteByte(' ')
 		}
